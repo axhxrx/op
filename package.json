@@ -5,7 +5,8 @@
   "exports": "./mod.ts",
   "license": "MIT",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/node": "^24.2.0"
   },
   "peerDependencies": {
     "typescript": "^5"
