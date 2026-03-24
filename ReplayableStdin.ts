@@ -2,6 +2,7 @@
 import { Buffer } from 'node:buffer';
 import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
+import process from 'node:process';
 import type { InputEvent, Session } from './RecordableStdin.ts';
 /**
  ReplayableStdin - Replays recorded user input, then switches to interactive mode once session replay finishes.

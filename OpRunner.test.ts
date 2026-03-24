@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import process from 'node:process';
 import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
