@@ -1,10 +1,6 @@
 import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
-import type {
-  FailureOutcomeOf,
-  OutcomeOf,
-  SuccessOutcomeOf,
-} from './Outcome.ts';
+import type { FailureOutcomeOf, OutcomeOf, SuccessOutcomeOf } from './Outcome.ts';
 import { PrintOp } from './PrintOp.ts';
 
 // PrintOp has been moved to its own file: PrintOp.ts
