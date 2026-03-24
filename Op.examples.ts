@@ -1,5 +1,6 @@
 import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
+import { OpRunner } from './OpRunner.ts';
 import type { FailureOutcomeOf, OutcomeOf, SuccessOutcomeOf } from './Outcome.ts';
 import { PrintOp } from './PrintOp.ts';
 
@@ -52,7 +53,16 @@ const _runExample = async () =>
 type _PrintOpOutcome = OutcomeOf<PrintOp>;
 // This is: Success<string> | Failure<'ProhibitedWord' | 'MessageTooLong' | 'unknownError'>
 
-export class FetchUserOp extends Op
+type FetchUserFailure =
+  | 'MissingUserId'
+  | 'InvalidUserId'
+  | 'EmailNotFound'
+  | 'unknownError';
+
+export class FetchUserOp extends Op<
+  { id: string; name: string; email: string },
+  FetchUserFailure
+>
 {
   constructor(private userId: string)
   {
@@ -152,7 +162,7 @@ async function _anotherExample()
 /**
  * Functional-style pattern matching helper — not sure this is useful IRL but it's a thought
  */
-export async function match<T extends Op>(
+export async function match<T extends Op<unknown, unknown>>(
   op: T,
   handlers: {
     success: (value: SuccessOutcomeOf<T>['value']) => void;
@@ -163,7 +173,8 @@ export async function match<T extends Op>(
   },
 )
 {
-  const outcome = await op.run();
+  const runner = await OpRunner.create(op);
+  const outcome = await runner.run();
   if (outcome.ok)
   {
     handlers.success(outcome.value);

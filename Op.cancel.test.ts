@@ -5,7 +5,7 @@ import { Op } from './Op.ts';
 /**
  Test op that can be canceled
  */
-class CancelableOp extends Op
+class CancelableOp extends Op<string, 'canceled'>
 {
   name = 'CancelableOp';
 

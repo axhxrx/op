@@ -1,12 +1,12 @@
 import type { Op } from './Op.ts';
-import type { OutcomeHandler } from './Outcome.ts';
+import type { AnyOutcome } from './Outcome.ts';
 
 /**
  Wrapper for OutcomeHandler that includes metadata for logging
  */
 export interface HandlerWithMeta
 {
-  handler: OutcomeHandler<Op>;
+  handler: (outcome: AnyOutcome) => Op<unknown, unknown>;
   parentName: string; // Name of the op that created this handler
 }
 

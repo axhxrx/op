@@ -8,6 +8,8 @@ export type PrintOpOutcome = Success<string> | Failure<'ProhibitedWord'> | Failu
   'unknownError'
 >;
 
+type PrintOpFailure = 'ProhibitedWord' | 'MessageTooLong' | 'unknownError';
+
 /**
  * Options for PrintOp
  */
@@ -48,7 +50,7 @@ export interface PrintOpOptions
  });
  ```
  */
-export class PrintOp extends Op
+export class PrintOp extends Op<string, PrintOpFailure>
 {
   private options: PrintOpOptions;
 

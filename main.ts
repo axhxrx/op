@@ -17,7 +17,7 @@ import type { OutcomeOf } from './Outcome.ts';
  await main(new MyRootOp());
  ```
  */
-export async function main<T extends Op>(
+export async function main<T extends Op<unknown, unknown>>(
   getInitialOp: T | ((args: string[]) => T),
 ): Promise<OutcomeOf<T>>
 {
@@ -32,6 +32,5 @@ export async function main<T extends Op>(
   // Run until the stack is empty!
   const finalResult = await runner.run();
 
-  // We are counting on OpRunner to ensure the final result is of type OutcomeOf<T>
-  return finalResult as OutcomeOf<T>;
+  return finalResult;
 }

@@ -2,29 +2,40 @@ import process from 'node:process';
 import type { IOContext } from './IOContext.ts';
 import { createDefaultLogger } from './Logger.ts';
 import { OpRunner } from './OpRunner.ts';
-import type { Failure, OpWithHandler, OutcomeHandler, Success } from './Outcome.ts';
+import {
+  type Failure,
+  OP_CONTROL,
+  type OpWithHandler,
+  type Outcome,
+  type OutcomeHandler,
+  type OutcomeOf,
+  type ReplaceOp,
+  type RunResult,
+  type Success,
+} from './Outcome.ts';
 
 /**
  Abstract base class for ops.
  */
-export abstract class Op
+export abstract class Op<SuccessT = unknown, FailureT = unknown>
 {
   /**
-   The `static` variant of `run()` creates an instance of the op and runs it.
+   The `static` variant of `run()` creates an instance of the op and executes it through OpRunner.
 
    This type-fu avoids the `Cannot create an instance of an abstract class` error.
    */
-  public static async run<ThisT extends new(...args: never[]) => Op>(
+  public static async run<ThisT extends new(...args: never[]) => Op<unknown, unknown>>(
     this: ThisT,
     ...args: ConstructorParameters<ThisT>
-  ): Promise<Awaited<ReturnType<InstanceType<ThisT>['run']>>>
+  ): Promise<OutcomeOf<InstanceType<ThisT>>>
   {
-    const op = new this(...args);
-    return await op.run() as Awaited<ReturnType<InstanceType<ThisT>['run']>>;
+    const op = new this(...args) as InstanceType<ThisT>;
+    const runner = await OpRunner.create(op);
+    return await runner.run();
   }
 
   abstract name: string;
-  abstract run(io?: IOContext): Promise<Success<unknown> | Failure<unknown>>;
+  abstract run(io?: IOContext): Promise<RunResult<SuccessT, FailureT>>;
 
   /**
    Get IO context, defaulting to process streams if not provided
@@ -43,7 +54,7 @@ export abstract class Op
 
   /**
    * Convenience method for logging from ops
-   * Uses the logger from IOContext, which respects the logging configuration
+   * Uses the logger from IOContext
    *
    * @example
    * ```typescript
@@ -83,20 +94,29 @@ export abstract class Op
 
    @param value - The success value
    */
-  succeed<T>(value: T): Success<T>
+  protected succeed<T>(value: T): Success<T>
   {
     return { ok: true, value };
   }
 
   /**
-   Helper to wrap a child Op with an outcome handler
+   Helper to explicitly replace the current op with another op that has the same terminal outcome type.
 
-   The handler receives the child's outcome and returns:
-   - true: Re-run the parent Op
-   - false: Normal completion (pop both parent and child)
-   - Op: Replace child with the returned Op (keep parent waiting)
+   This is the explicit control-flow equivalent of the old `return this.succeed(nextOp)` pattern.
+   It keeps terminal outcomes and control-flow values separate.
+   */
+  protected replaceWith(nextOp: Op<SuccessT, FailureT>): ReplaceOp<Outcome<SuccessT, FailureT>>
+  {
+    return {
+      [OP_CONTROL]: 'replace',
+      op: nextOp,
+    };
+  }
 
-   This enables flexible control flow without circular dependencies. The parent can inspect both success and failure outcomes of the child and decide what to do next.
+  /**
+   Helper to suspend the current op, run a child, and resume via a handler.
+
+   The handler receives the child's terminal outcome and must return an op with the same terminal outcome type as the parent.
 
    @param op - The child Op to run
    @param handler - Function that receives child's outcome and decides what to do
@@ -117,13 +137,6 @@ export abstract class Op
      }
    );
 
-   // Done after child completes
-   return this.handleOutcome(
-     new DisplayResultOp(data),
-     () => null // Pop both when done
-   );
-
-   // Route to different ops based on outcome
    return this.handleOutcome(
      new SelectFromListOp(['A', 'B', 'Back']),
      (outcome) => {
@@ -135,13 +148,17 @@ export abstract class Op
    );
    ```
    */
-  protected handleOutcome<OpT extends Op>(
+  protected handleOutcome<OpT extends Op<unknown, unknown>>(
     op: OpT,
-    handler?: OutcomeHandler<OpT>,
-  ): Success<OpWithHandler<OpT>>
+    handler?: OutcomeHandler<OpT, Outcome<SuccessT, FailureT>>,
+  ): OpWithHandler<OpT, Outcome<SuccessT, FailureT>>
   {
-    const defaultHandler = (_outcome: ReturnType<typeof this['run']>) => this;
-    return this.succeed({ op, handler: handler || defaultHandler });
+    const defaultHandler = (_outcome: OutcomeOf<OpT>): Op<SuccessT, FailureT> => this;
+    return {
+      [OP_CONTROL]: 'child',
+      op,
+      handler: handler || defaultHandler,
+    };
   }
 
   /**

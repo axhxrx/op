@@ -160,7 +160,10 @@ test('OutcomeOf utility type works correctly', () =>
   };
 });
 
-class CalculateOp extends Op
+class CalculateOp extends Op<
+  { sum: number; product: number },
+  'NegativeInput' | 'InputTooLarge' | 'unknownError'
+>
 {
   constructor(
     private a: number,
@@ -193,6 +196,28 @@ class CalculateOp extends Op
       sum: this.a + this.b,
       product: this.a * this.b,
     });
+  }
+}
+
+class StaticRunFinalOp extends Op<string, 'unknownError'>
+{
+  name = 'StaticRunFinalOp';
+
+  async run(_io?: IOContext)
+  {
+    await Promise.resolve();
+    return this.succeed('terminal result');
+  }
+}
+
+class StaticRunRootOp extends Op<string, 'unknownError'>
+{
+  name = 'StaticRunRootOp';
+
+  async run(_io?: IOContext)
+  {
+    await Promise.resolve();
+    return this.replaceWith(new StaticRunFinalOp());
   }
 }
 
@@ -241,6 +266,16 @@ test('CalculateOp - failure cases', async () =>
   {
     throw new Error('Expected failure');
   }
+});
+
+test('Op.run() executes through OpRunner and returns terminal outcome', async () =>
+{
+  const outcome = await StaticRunRootOp.run();
+
+  expect(outcome).toEqual({
+    ok: true,
+    value: 'terminal result',
+  });
 });
 
 test('Type narrowing works correctly', async () =>

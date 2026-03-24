@@ -45,7 +45,8 @@ export class TeeStream extends Writable
   /**
    Write implementation - writes to both console and log file
    */
-  override _write(chunk: Buffer | string, encoding: NodeJS.BufferEncoding, callback: (error?: Error | null) => void): void
+  override _write(chunk: Buffer | string, encoding: NodeJS.BufferEncoding,
+    callback: (error?: Error | null) => void): void
   {
     try
     {
@@ -64,16 +65,12 @@ export class TeeStream extends Writable
 
       // Only add timestamp at the start of new lines
       const lines = text.split('\n');
-      const timestampedLines = lines.map((line: string, index: number) =>
+      const timestampedLines = lines.map((line: string) =>
       {
         // Don't timestamp empty lines or continuation lines
         if (line.length === 0) return line;
-        // Add timestamp to first line and lines after newlines
-        if (index === 0 || lines[index - 1].endsWith('\n'))
-        {
-          return `[${timestamp}] ${line}`;
-        }
-        return line;
+        // Add a timestamp to each non-empty line in the chunk
+        return `[${timestamp}] ${line}`;
       });
 
       this.logWriter.write(timestampedLines.join('\n'));
