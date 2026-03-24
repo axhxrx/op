@@ -30,6 +30,7 @@ export function stripAnsi(text: string): string
   //          ESC ] ... (Operating System Command)
   //          Other escape sequences
   // eslint-disable-next-line no-control-regex
+  // deno-lint-ignore no-control-regex
   const ansiPattern = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[=>]|\x1b[()][AB0-2]/g;
 
   return text.replace(ansiPattern, '');
@@ -55,6 +56,7 @@ export function stripAnsiFromLines(lines: string[]): string[]
 export function hasAnsi(text: string): boolean
 {
   // eslint-disable-next-line no-control-regex
+  // deno-lint-ignore no-control-regex
   const ansiPattern = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[=>]|\x1b[()][AB0-2]/;
   return ansiPattern.test(text);
 }
