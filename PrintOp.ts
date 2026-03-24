@@ -4,7 +4,9 @@ import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import type { Failure, Success } from './Outcome.ts';
 
-export type PrintOpOutcome = Success<string> | Failure<'ProhibitedWord'> | Failure<'MessageTooLong'> | Failure<'unknownError'>;
+export type PrintOpOutcome = Success<string> | Failure<'ProhibitedWord'> | Failure<'MessageTooLong'> | Failure<
+  'unknownError'
+>;
 
 /**
  * Options for PrintOp

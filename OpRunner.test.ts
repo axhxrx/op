@@ -42,9 +42,9 @@ class ScriptedOp extends Op
     this.script = script;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async run(_io?: IOContext)
   {
+    await Promise.resolve();
     const action = this.script[this.callCount++];
 
     if (!action)
@@ -105,8 +105,10 @@ function formatStack(snapshot: string[]): string
  */
 function logStackEvolution(states: string[][])
 {
-  if (!DEBUG) return;
-
+  if (!DEBUG)
+  {
+    return;
+  }
   console.log('\n📚 Stack Evolution:');
   states.forEach((state, i) =>
   {
@@ -123,9 +125,7 @@ describe('Basic Execution', () =>
 {
   test('Single op succeeds', async () =>
   {
-    const op = new ScriptedOp('SingleOp', [
-      { type: 'succeed', value: 'done' },
-    ]);
+    const op = new ScriptedOp('SingleOp', [{ type: 'succeed', value: 'done' }]);
 
     const runner = await OpRunner.create(op, { mode: 'test' });
     const states = await captureExecution(runner);
@@ -179,17 +179,11 @@ describe('Basic Execution', () =>
 
   test('Multiple sequential replacements', async () =>
   {
-    const op3 = new ScriptedOp('Op3', [
-      { type: 'succeed', value: 'done' },
-    ]);
+    const op3 = new ScriptedOp('Op3', [{ type: 'succeed', value: 'done' }]);
 
-    const op2 = new ScriptedOp('Op2', [
-      { type: 'replaceWith', nextOp: op3 },
-    ]);
+    const op2 = new ScriptedOp('Op2', [{ type: 'replaceWith', nextOp: op3 }]);
 
-    const op1 = new ScriptedOp('Op1', [
-      { type: 'replaceWith', nextOp: op2 },
-    ]);
+    const op1 = new ScriptedOp('Op1', [{ type: 'replaceWith', nextOp: op2 }]);
 
     const runner = await OpRunner.create(op1, { mode: 'test' });
     const states = await captureExecution(runner);
@@ -213,9 +207,7 @@ describe('HandleOutcome - Basic', () =>
 {
   test('Parent → Child with default handler (parent re-runs)', async () =>
   {
-    const child = new ScriptedOp('Child', [
-      { type: 'succeed', value: 'done' },
-    ]);
+    const child = new ScriptedOp('Child', [{ type: 'succeed', value: 'done' }]);
 
     const parent = new ScriptedOp('Parent', [
       { type: 'handleOutcome', child }, // First run
@@ -270,9 +262,7 @@ describe('HandleOutcome - Basic', () =>
       { type: 'succeed', value: 'success value' },
     ]);
 
-    const nextOp = new ScriptedOp('NextOp', [
-      { type: 'succeed', value: null },
-    ]);
+    const nextOp = new ScriptedOp('NextOp', [{ type: 'succeed', value: null }]);
 
     const parent = new ScriptedOp('Parent', [
       {
@@ -303,9 +293,7 @@ describe('HandleOutcome - Basic', () =>
       { type: 'fail', failure: 'child error' },
     ]);
 
-    const nextOp = new ScriptedOp('NextOp', [
-      { type: 'succeed', value: null },
-    ]);
+    const nextOp = new ScriptedOp('NextOp', [{ type: 'succeed', value: null }]);
 
     const parent = new ScriptedOp('Parent', [
       {
@@ -349,7 +337,9 @@ describe('HandleOutcome - Basic', () =>
     logStackEvolution(states);
 
     // Should see 3 complete loops
-    expect(states.filter(s => s.length === 2 && s[0] === 'Handler<Parent>')).toHaveLength(3);
+    expect(
+      states.filter((s) => s.length === 2 && s[0] === 'Handler<Parent>'),
+    ).toHaveLength(3);
     expect(states[states.length - 1]).toEqual([]); // Final state is empty
   });
 });
@@ -362,9 +352,7 @@ describe('Nesting & Deep Stacks', () =>
 {
   test('2-level nesting: A → B → C', async () =>
   {
-    const c = new ScriptedOp('C', [
-      { type: 'succeed', value: 'c done' },
-    ]);
+    const c = new ScriptedOp('C', [{ type: 'succeed', value: 'c done' }]);
 
     const b = new ScriptedOp('B', [
       { type: 'handleOutcome', child: c },
@@ -393,9 +381,7 @@ describe('Nesting & Deep Stacks', () =>
 
   test('3-level nesting: A → B → C → D', async () =>
   {
-    const d = new ScriptedOp('D', [
-      { type: 'succeed', value: 'd done' },
-    ]);
+    const d = new ScriptedOp('D', [{ type: 'succeed', value: 'd done' }]);
 
     const c = new ScriptedOp('C', [
       { type: 'handleOutcome', child: d },
@@ -418,7 +404,7 @@ describe('Nesting & Deep Stacks', () =>
     logStackEvolution(states);
 
     // Verify maximum stack depth
-    const maxDepth = Math.max(...states.map(s => s.length));
+    const maxDepth = Math.max(...states.map((s) => s.length));
     expect(maxDepth).toBe(4); // A, Handler<A>, Handler<B>, Handler<C>, D
 
     expect(states[states.length - 1]).toEqual([]); // Final state is empty
@@ -428,17 +414,11 @@ describe('Nesting & Deep Stacks', () =>
   {
     const executionOrder: string[] = [];
 
-    const c = new ScriptedOp('C', [
-      { type: 'succeed', value: 'c' },
-    ]);
+    const c = new ScriptedOp('C', [{ type: 'succeed', value: 'c' }]);
 
-    const nextB = new ScriptedOp('NextB', [
-      { type: 'succeed', value: null },
-    ]);
+    const nextB = new ScriptedOp('NextB', [{ type: 'succeed', value: null }]);
 
-    const nextA = new ScriptedOp('NextA', [
-      { type: 'succeed', value: null },
-    ]);
+    const nextA = new ScriptedOp('NextA', [{ type: 'succeed', value: null }]);
 
     const b = new ScriptedOp('B', [
       {
@@ -473,13 +453,9 @@ describe('Nesting & Deep Stacks', () =>
 
   test('Mixed handlers: some default, some custom', async () =>
   {
-    const nextOp = new ScriptedOp('NextOp', [
-      { type: 'succeed', value: null },
-    ]);
+    const nextOp = new ScriptedOp('NextOp', [{ type: 'succeed', value: null }]);
 
-    const c = new ScriptedOp('C', [
-      { type: 'succeed', value: 'c' },
-    ]);
+    const c = new ScriptedOp('C', [{ type: 'succeed', value: 'c' }]);
 
     const b = new ScriptedOp('B', [
       { type: 'handleOutcome', child: c }, // Default handler
@@ -506,9 +482,7 @@ describe('Nesting & Deep Stacks', () =>
 
   test('Stack depth verification at each step', async () =>
   {
-    const c = new ScriptedOp('C', [
-      { type: 'succeed', value: 'c' },
-    ]);
+    const c = new ScriptedOp('C', [{ type: 'succeed', value: 'c' }]);
 
     const b = new ScriptedOp('B', [
       { type: 'handleOutcome', child: c },
@@ -524,7 +498,7 @@ describe('Nesting & Deep Stacks', () =>
     const states = await captureExecution(runner);
 
     // Verify stack depths
-    const depths = states.map(s => s.length);
+    const depths = states.map((s) => s.length);
 
     // Should start at 1, grow to 3, then shrink back to 0
     expect(depths[0]).toBe(1); // [A]
@@ -557,7 +531,7 @@ describe('Complex Flows', () =>
       {
         type: 'handleOutcome',
         child,
-        handler: (outcome) => outcome.ok ? successOp : failureOp,
+        handler: (outcome) => (outcome.ok ? successOp : failureOp),
       },
     ]);
 
@@ -573,17 +547,11 @@ describe('Complex Flows', () =>
 
   test('Sequential children: Parent → Child1, then Child2, then Child3', async () =>
   {
-    const child3 = new ScriptedOp('Child3', [
-      { type: 'succeed', value: 3 },
-    ]);
+    const child3 = new ScriptedOp('Child3', [{ type: 'succeed', value: 3 }]);
 
-    const child2 = new ScriptedOp('Child2', [
-      { type: 'succeed', value: 2 },
-    ]);
+    const child2 = new ScriptedOp('Child2', [{ type: 'succeed', value: 2 }]);
 
-    const child1 = new ScriptedOp('Child1', [
-      { type: 'succeed', value: 1 },
-    ]);
+    const child1 = new ScriptedOp('Child1', [{ type: 'succeed', value: 1 }]);
 
     const parent = new ScriptedOp('Parent', [
       { type: 'handleOutcome', child: child1 }, // Run child1
@@ -598,9 +566,15 @@ describe('Complex Flows', () =>
     logStackEvolution(states);
 
     // Should see all three children in sequence
-    expect(states.filter(s => s.includes('Child1')).length).toBeGreaterThan(0);
-    expect(states.filter(s => s.includes('Child2')).length).toBeGreaterThan(0);
-    expect(states.filter(s => s.includes('Child3')).length).toBeGreaterThan(0);
+    expect(states.filter((s) => s.includes('Child1')).length).toBeGreaterThan(
+      0,
+    );
+    expect(states.filter((s) => s.includes('Child2')).length).toBeGreaterThan(
+      0,
+    );
+    expect(states.filter((s) => s.includes('Child3')).length).toBeGreaterThan(
+      0,
+    );
   });
 
   test('Child replaces itself mid-execution', async () =>
@@ -609,9 +583,7 @@ describe('Complex Flows', () =>
       { type: 'succeed', value: 'done' },
     ]);
 
-    const child = new ScriptedOp('Child', [
-      { type: 'replaceWith', nextOp },
-    ]);
+    const child = new ScriptedOp('Child', [{ type: 'replaceWith', nextOp }]);
 
     const parent = new ScriptedOp('Parent', [
       { type: 'handleOutcome', child },
@@ -669,9 +641,7 @@ describe('Complex Flows', () =>
       { type: 'fail', failure: 'child error' },
     ]);
 
-    const nextOp = new ScriptedOp('NextOp', [
-      { type: 'succeed', value: null },
-    ]);
+    const nextOp = new ScriptedOp('NextOp', [{ type: 'succeed', value: null }]);
 
     const b = new ScriptedOp('B', [
       {
@@ -714,9 +684,7 @@ describe('Complex Flows', () =>
       { type: 'succeed', value: 'original value' },
     ]);
 
-    const nextOp = new ScriptedOp('NextOp', [
-      { type: 'succeed', value: null },
-    ]);
+    const nextOp = new ScriptedOp('NextOp', [{ type: 'succeed', value: null }]);
 
     const parent = new ScriptedOp('Parent', [
       {
@@ -748,9 +716,7 @@ describe('Stack State Validation', () =>
 {
   test('Verify handler parent names are correct', async () =>
   {
-    const child = new ScriptedOp('Child', [
-      { type: 'succeed', value: 'done' },
-    ]);
+    const child = new ScriptedOp('Child', [{ type: 'succeed', value: 'done' }]);
 
     const parent = new ScriptedOp('ParentOp', [
       { type: 'handleOutcome', child },
@@ -761,16 +727,14 @@ describe('Stack State Validation', () =>
     const states = await captureExecution(runner);
 
     // Find state with handler
-    const handlerState = states.find(s => s.includes('Handler<ParentOp>'));
+    const handlerState = states.find((s) => s.includes('Handler<ParentOp>'));
     expect(handlerState).toBeDefined();
     expect(handlerState).toContain('Handler<ParentOp>');
   });
 
   test('Verify stack mutations match expected pattern', async () =>
   {
-    const child = new ScriptedOp('Child', [
-      { type: 'succeed', value: 'done' },
-    ]);
+    const child = new ScriptedOp('Child', [{ type: 'succeed', value: 'done' }]);
 
     const parent = new ScriptedOp('Parent', [
       { type: 'handleOutcome', child },
@@ -789,6 +753,7 @@ describe('Stack State Validation', () =>
     expect(states[3]).toEqual([]); // Final
   });
 
+  // deno-lint-ignore require-await
   test('Edge case: handler at top of stack (should never happen)', async () =>
   {
     // This test verifies the error handling in runStep()
@@ -813,9 +778,7 @@ describe('Edge Cases', () =>
 {
   test('Empty stack after completion', async () =>
   {
-    const op = new ScriptedOp('Op', [
-      { type: 'succeed', value: 'done' },
-    ]);
+    const op = new ScriptedOp('Op', [{ type: 'succeed', value: 'done' }]);
 
     const runner = await OpRunner.create(op, { mode: 'test' });
     const states = await captureExecution(runner);
@@ -848,7 +811,7 @@ describe('Edge Cases', () =>
     logStackEvolution(states);
 
     // Should reach max depth of 10 (all handlers + deepest op)
-    const maxDepth = Math.max(...states.map(s => s.length));
+    const maxDepth = Math.max(...states.map((s) => s.length));
     expect(maxDepth).toBeGreaterThanOrEqual(10);
 
     // Should eventually complete
