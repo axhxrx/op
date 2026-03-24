@@ -5,6 +5,7 @@ import { createIOContext, type IOContext } from './IOContext.ts';
 import { isOp } from './isOp.ts';
 import type { Op } from './Op.ts';
 import {
+  OP_CONTROL,
   isOpWithHandler,
   isOutcome,
   isReplaceOp,
@@ -165,6 +166,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
     if (isOpWithHandler(result))
     {
       const handlerWithMeta: HandlerWithMeta = {
+        [OP_CONTROL]: 'handler',
         handler: result.handler,
         parentName: op.name,
       };
