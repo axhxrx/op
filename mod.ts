@@ -4,7 +4,7 @@ export { OpRunner } from './OpRunner.ts';
 export * from './Outcome.ts';
 
 // IO
-export type { IOContext } from './IOContext.ts';
+export type { IOContext, IOContextStreams } from './IOContext.ts';
 export { createIOContext } from './IOContext.ts';
 export { createDefaultLogger, Logger } from './Logger.ts';
 
@@ -22,8 +22,8 @@ export { ReplayableStdin } from './ReplayableStdin.ts';
 
 // I/O utilities
 export { hasAnsi, stripAnsi, stripAnsiFromLines } from './stripAnsi.ts';
-export { TeeStream } from './TeeStream.ts';
-export type { TeeStreamOptions } from './TeeStream.ts';
+export { TeeStream, TeeStreamLogSink } from './TeeStream.ts';
+export type { TeeStreamOptions, TeeStreamPair, TeeStreamTerminalStreams } from './TeeStream.ts';
 
 // Simple op
 export { PrintOp } from './PrintOp.ts';

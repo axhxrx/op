@@ -1,8 +1,13 @@
 import { expect, test } from 'bun:test';
-import type { IOContext } from './IOContext.ts';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
+import { createIOContext, type IOContext } from './IOContext.ts';
 import { FetchUserOp, PrintOp } from './Op.examples.ts';
 import { Op } from './Op.ts';
 import type { OutcomeOf } from './Outcome.ts';
+import { TeeStream } from './TeeStream.ts';
 
 test('PrintOp - success case', async () =>
 {
@@ -221,6 +226,28 @@ class StaticRunRootOp extends Op<string, 'unknownError'>
   }
 }
 
+class LoggingOp extends Op<string, 'unknownError'>
+{
+  name = 'LoggingOp';
+
+  run(io?: IOContext)
+  {
+    this.log(io, 'hello from logger');
+    this.warn(io, 'warning from logger');
+    this.error(io, 'error from logger');
+    return Promise.resolve(this.succeed('ok'));
+  }
+}
+
+function endTeeStream(stream: TeeStream): Promise<void>
+{
+  return new Promise<void>((resolve, reject) =>
+  {
+    stream.once('error', reject);
+    stream.end(resolve);
+  });
+}
+
 test('CalculateOp - success with complex return type', async () =>
 {
   const op = new CalculateOp(5, 10);
@@ -276,6 +303,68 @@ test('Op.run() executes through OpRunner and returns terminal outcome', async ()
     ok: true,
     value: 'terminal result',
   });
+});
+
+test('Op logger respects IOContext stdout and log file', async () =>
+{
+  const tempDir = await mkdtemp(join(tmpdir(), 'op-logger-'));
+  const logFile = join(tempDir, 'runner.log');
+  const stdoutTerminal = new PassThrough();
+  const stderrTerminal = new PassThrough();
+  let stdoutOutput = '';
+  let stderrOutput = '';
+
+  stdoutTerminal.setEncoding('utf8');
+  stderrTerminal.setEncoding('utf8');
+  stdoutTerminal.on('data', (chunk: string) =>
+  {
+    stdoutOutput += chunk;
+  });
+  stderrTerminal.on('data', (chunk: string) =>
+  {
+    stderrOutput += chunk;
+  });
+
+  try
+  {
+    const io = await createIOContext({
+      mode: 'test',
+      logFile,
+    }, {
+      stdout: stdoutTerminal,
+      stderr: stderrTerminal,
+    });
+
+    const outcome = await new LoggingOp().run(io);
+    expect(outcome).toEqual({
+      ok: true,
+      value: 'ok',
+    });
+
+    const stdout = io.stdout;
+    const stderr = io.stderr;
+    if (!(stdout instanceof TeeStream) || !(stderr instanceof TeeStream))
+    {
+      throw new Error('Expected IOContext stdout and stderr to be TeeStreams');
+    }
+
+    await Promise.all([endTeeStream(stdout), endTeeStream(stderr)]);
+
+    const logContents = await readFile(logFile, 'utf8');
+    expect(logContents).toContain('hello from logger');
+    expect(logContents).toContain('warning from logger');
+    expect(logContents).toContain('error from logger');
+    expect(stdoutOutput).toContain('hello from logger');
+    expect(stdoutOutput).not.toContain('warning from logger');
+    expect(stdoutOutput).not.toContain('error from logger');
+    expect(stderrOutput).toContain('warning from logger');
+    expect(stderrOutput).toContain('error from logger');
+    expect(stderrOutput).not.toContain('hello from logger');
+  }
+  finally
+  {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('Type narrowing works correctly', async () =>

@@ -6,13 +6,14 @@ import { ReplayableStdin } from './ReplayableStdin.ts';
 import { TeeStream } from './TeeStream.ts';
 
 /**
- IO Context provides stdin/stdout streams for ops
+ IO Context provides stdin/stdout/stderr streams for ops
 
  Allows switching between interactive, record, replay, and test modes
  */
 export type IOContext = {
   stdin: NodeJS.ReadStream | RecordableStdin | ReplayableStdin;
   stdout: NodeJS.WriteStream | NodeJS.WritableStream;
+  stderr: NodeJS.WriteStream | NodeJS.WritableStream;
   mode: 'interactive' | 'record' | 'replay' | 'test';
   logger: Logger;
   // Optional: Keep reference to RecordableStdin for saving later
@@ -21,21 +22,55 @@ export type IOContext = {
   replayableStdin?: ReplayableStdin;
 };
 
+export type IOContextStreams = {
+  stdin?: NodeJS.ReadStream;
+  stdout?: NodeJS.WriteStream | NodeJS.WritableStream;
+  stderr?: NodeJS.WriteStream | NodeJS.WritableStream;
+};
+
+function writeLine(
+  stream: NodeJS.WriteStream | NodeJS.WritableStream,
+  message: string,
+): void
+{
+  stream.write(`${message}\n`);
+}
+
 /**
  Create an IOContext from OpRunner configuration
 
  Handles:
- - Logging: If config.logFile is set, creates TeeStream to write to both console and file
+ - Logging: If config.logFile is set, creates paired TeeStreams that write stdout/stderr to terminal and a shared log file
  - Recording: If mode is 'record', creates RecordableStdin to capture input
  - Replay: If mode is 'replay', creates ReplayableStdin to play back session
 
  @param config - OpRunner configuration from arg parsing
  @returns IOContext with appropriate streams
  */
-export async function createIOContext(config: OpRunnerArgs): Promise<IOContext>
+export async function createIOContext(
+  config: OpRunnerArgs,
+  streams: IOContextStreams = {},
+): Promise<IOContext>
 {
+  const defaultStdin = streams.stdin ?? process.stdin;
+  const defaultStdout = streams.stdout ?? process.stdout;
+  const defaultStderr = streams.stderr ?? process.stderr;
+
+  let stdout: NodeJS.WriteStream | NodeJS.WritableStream = defaultStdout;
+  let stderr: NodeJS.WriteStream | NodeJS.WritableStream = defaultStderr;
+
+  if (config.logFile)
+  {
+    const teeStreams = TeeStream.createPair(config.logFile, {
+      stdout: defaultStdout,
+      stderr: defaultStderr,
+    });
+    stdout = teeStreams.stdout;
+    stderr = teeStreams.stderr;
+  }
+
   // Create stdin - use RecordableStdin if recording, ReplayableStdin if replaying
-  let stdin: NodeJS.ReadStream | RecordableStdin | ReplayableStdin = process.stdin;
+  let stdin: NodeJS.ReadStream | RecordableStdin | ReplayableStdin = defaultStdin;
   let recordableStdin: RecordableStdin | undefined;
   let replayableStdin: ReplayableStdin | undefined;
 
@@ -44,7 +79,7 @@ export async function createIOContext(config: OpRunnerArgs): Promise<IOContext>
     recordableStdin = new RecordableStdin();
     // RecordableStdin is compatible with ReadStream (implements EventEmitter interface)
     stdin = recordableStdin;
-    console.log(`[IOContext] 🔴 Recording input to: ${config.sessionFile}\n`);
+    writeLine(stdout, `[IOContext] 🔴 Recording input to: ${config.sessionFile}`);
   }
   else if (config.mode === 'replay')
   {
@@ -57,23 +92,22 @@ export async function createIOContext(config: OpRunnerArgs): Promise<IOContext>
     // ReplayableStdin will print its own status messages
   }
 
-  // Create stdout - use TeeStream if logging is enabled
-  const stdout = config.logFile
-    ? new TeeStream(config.logFile)
-    : process.stdout;
-
   // Log configuration info if logging is enabled
   if (config.logFile)
   {
-    console.log(`[IOContext] 📝 Logging to: ${config.logFile}\n`);
+    writeLine(stdout, `[IOContext] 📝 Logging to: ${config.logFile}`);
   }
 
-  // Create logger (simple for now, no namespace)
-  const logger = createDefaultLogger();
+  const logger = createDefaultLogger({
+    logWriter: (message) => writeLine(stdout, message),
+    warnWriter: (message) => writeLine(stderr, message),
+    errorWriter: (message) => writeLine(stderr, message),
+  });
 
   return {
     stdin,
     stdout,
+    stderr,
     mode: config.mode,
     logger,
     recordableStdin,

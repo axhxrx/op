@@ -5,10 +5,10 @@ import { createIOContext, type IOContext } from './IOContext.ts';
 import { isOp } from './isOp.ts';
 import type { Op } from './Op.ts';
 import {
-  OP_CONTROL,
   isOpWithHandler,
   isOutcome,
   isReplaceOp,
+  OP_CONTROL,
   type OutcomeOf,
 } from './Outcome.ts';
 

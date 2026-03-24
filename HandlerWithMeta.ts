@@ -1,5 +1,5 @@
 import type { Op } from './Op.ts';
-import { OP_CONTROL, type AnyOutcome } from './Outcome.ts';
+import { type AnyOutcome, OP_CONTROL } from './Outcome.ts';
 
 /**
  Wrapper for OutcomeHandler that includes metadata for logging

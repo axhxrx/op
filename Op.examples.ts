@@ -4,8 +4,7 @@ import { OpRunner } from './OpRunner.ts';
 import type { FailureOutcomeOf, OutcomeOf, SuccessOutcomeOf } from './Outcome.ts';
 import { PrintOp } from './PrintOp.ts';
 
-// PrintOp has been moved to its own file: PrintOp.ts
-// It's re-exported here for backwards compatibility
+// This is example code, e.g. for README or docs, hence it may be unused.
 export { PrintOp } from './PrintOp.ts';
 
 const _runExample = async () =>
@@ -160,7 +159,7 @@ async function _anotherExample()
 }
 
 /**
- * Functional-style pattern matching helper — not sure this is useful IRL but it's a thought
+ Functional-style pattern matching helper — not sure this is useful IRL but it's a thought
  */
 export async function match<T extends Op<unknown, unknown>>(
   op: T,

@@ -47,6 +47,7 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
       ?? {
         stdin: process.stdin,
         stdout: process.stdout,
+        stderr: process.stderr,
         mode: 'interactive',
         logger: createDefaultLogger(),
       };

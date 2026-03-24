@@ -10,10 +10,29 @@
 
  Current implementation: Simple wrapper around console with namespace
  */
+type LoggerWriter = (message: string) => void;
+
+export interface LoggerOptions
+{
+  namespace?: string;
+  logWriter?: LoggerWriter;
+  warnWriter?: LoggerWriter;
+  errorWriter?: LoggerWriter;
+}
+
 export class Logger
 {
-  constructor(private namespace?: string)
+  private namespace?: string;
+  private logWriter?: LoggerWriter;
+  private warnWriter?: LoggerWriter;
+  private errorWriter?: LoggerWriter;
+
+  constructor(options: LoggerOptions = {})
   {
+    this.namespace = options.namespace;
+    this.logWriter = options.logWriter;
+    this.warnWriter = options.warnWriter;
+    this.errorWriter = options.errorWriter;
   }
 
   /**
@@ -22,7 +41,13 @@ export class Logger
   log(message: string): void
   {
     const prefix = this.namespace ? `[${this.namespace}] ` : '';
-    console.log(prefix + message);
+    const text = prefix + message;
+    if (this.logWriter)
+    {
+      this.logWriter(text);
+      return;
+    }
+    console.log(text);
   }
 
   /**
@@ -31,7 +56,13 @@ export class Logger
   warn(message: string): void
   {
     const prefix = this.namespace ? `[${this.namespace}] ` : '';
-    console.warn(prefix + message);
+    const text = prefix + message;
+    if (this.warnWriter)
+    {
+      this.warnWriter(text);
+      return;
+    }
+    console.warn(text);
   }
 
   /**
@@ -40,7 +71,13 @@ export class Logger
   error(message: string): void
   {
     const prefix = this.namespace ? `[${this.namespace}] ` : '';
-    console.error(prefix + message);
+    const text = prefix + message;
+    if (this.errorWriter)
+    {
+      this.errorWriter(text);
+      return;
+    }
+    console.error(text);
   }
 
   /**
@@ -60,7 +97,12 @@ export class Logger
     const newNamespace = this.namespace
       ? `${this.namespace}:${subNamespace}`
       : subNamespace;
-    return new Logger(newNamespace);
+    return new Logger({
+      namespace: newNamespace,
+      logWriter: this.logWriter,
+      warnWriter: this.warnWriter,
+      errorWriter: this.errorWriter,
+    });
   }
 
   /**
@@ -75,7 +117,7 @@ export class Logger
 /**
  Create a default logger (no namespace)
  */
-export function createDefaultLogger(): Logger
+export function createDefaultLogger(options: LoggerOptions = {}): Logger
 {
-  return new Logger();
+  return new Logger(options);
 }
