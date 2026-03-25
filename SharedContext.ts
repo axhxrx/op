@@ -38,9 +38,9 @@ export class SharedContext
   private static _overrideIOContext: IOContext | null = null;
 
   /**
-   Anybody may set the override default IO context, as it is expictly for tests, and unusual cases like integrating with some other library that manipulates stdin/stdout.
+   Anybody may set the override default IO context, as it is explicitly for tests, and unusual cases like integrating with some other library that manipulates stdin/stdout.
 
-   Other entities can decide for themselves whetherto support it, but `Op` explicitly will use it if set.
+   Other entities can decide for themselves whether to support it, but `Op` explicitly will use it if set.
    */
   static set overrideDefaultIOContext(ioContext: IOContext | null)
   {

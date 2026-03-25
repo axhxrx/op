@@ -9,9 +9,9 @@ export { createIOContext } from './IOContext.ts';
 export { createDefaultLogger, Logger } from './Logger.ts';
 
 // Type guards
-export { isOp } from './isOp.ts';
 export { isHandler } from './HandlerWithMeta.ts';
 export type { HandlerWithMeta } from './HandlerWithMeta.ts';
+export { isOp } from './isOp.ts';
 
 // Args
 export { parseOpRunnerArgs } from './args.ts';

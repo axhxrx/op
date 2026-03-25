@@ -51,3 +51,11 @@ Prohibitions nest safely. Sensitive input still reaches your app normally, but i
 ## Runtime
 
 The aim is to be runtime-agnostic to the degree feasible; Bun and Deno for sure, and hopefully recent versions of Node.js, too.
+
+## License
+
+MIT
+
+## Happenings
+
+2026-03-25 🍼 0.9.1 initial public release (although this is a rewrite of a rewrite of a rewrite of a rewrite, so there's hopefully nothing new or novel in here...)

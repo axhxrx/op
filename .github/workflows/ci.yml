@@ -13,6 +13,10 @@ jobs:
         with:
           deno-version: v2.x
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -20,38 +24,27 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Test (Bun) and check (Bun)
-        run: bun test && bun check
+      - name: Test (Bun)
+        run: bun test
 
-      - name: Install dependencies for Deno
-        run: deno install
+      - name: Lint (Deno)
+        run: deno lint
 
-      - name: Check (Deno)
-        run: deno check && deno lint
-
-      # The --allow-dirty is needed because in CI the deno.lock file may be modified
       - name: JSR check
-        run: deno publish --dry-run --allow-dirty
-
+        run: npx jsr publish --allow-dirty
+        
   # Only run if we're on main and the test job succeeded:
-  # publish:
-  #   needs: [test]
-  #   runs-on: ubuntu-latest
-  #   if: ${{ success() && startsWith(github.ref, 'refs/heads/main') }}
+  publish:
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: ${{ success() && startsWith(github.ref, 'refs/heads/main') }}
 
-  #   permissions:
-  #     contents: read
-  #     id-token: write
+    permissions:
+      contents: read
+      id-token: write
 
-  #   steps:
-  #     - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - uses: denoland/setup-deno@v2
-  #       with:
-  #         deno-version: v2.x
-
-  #     - name: Install dependencies
-  #       run: deno install
-
-  #     - name: 'Publish package (if new version exists)'
-  #       run: npx jsr publish --allow-dirty --allow-slow-types
+      - name: 'Publish package (if new version exists)'
+        run: npx jsr publish --allow-dirty
