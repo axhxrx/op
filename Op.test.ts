@@ -398,3 +398,95 @@ test('Type narrowing works correctly', async () =>
     const _val = outcome.value;
   }
 });
+
+test('Op.getIO prefers explicit io over OpRunner.defaultIOContext', async () =>
+{
+  const customIO = await createIOContext({ mode: 'test' }, {
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+  });
+
+  class GetIOTestOp extends Op<IOContext, never>
+  {
+    name = 'GetIOTestOp';
+    async run(io?: IOContext)
+    {
+      await Promise.resolve();
+      return this.succeed(this.getIO(io));
+    }
+  }
+
+  const op = new GetIOTestOp();
+  const outcome = await op.run(customIO);
+
+  if (!outcome.ok) throw new Error('Expected success');
+  expect(outcome.value).toBe(customIO);
+  expect(outcome.value.mode).toBe('test');
+});
+
+test('Op.fail includes debugData when provided', async () =>
+{
+  class FailDebugOp extends Op<never, 'badThing'>
+  {
+    name = 'FailDebugOp';
+    async run(_io?: IOContext)
+    {
+      await Promise.resolve();
+      return this.fail('badThing' as const, 'extra info here');
+    }
+  }
+
+  const outcome = await new FailDebugOp().run();
+  if (outcome.ok) throw new Error('Expected failure');
+  expect(outcome.failure).toBe('badThing');
+  expect(outcome.debugData).toBe('extra info here');
+});
+
+test('Op.failWithUnknownError includes debugData', async () =>
+{
+  class UnknownFailOp extends Op<never, 'unknownError'>
+  {
+    name = 'UnknownFailOp';
+    async run(_io?: IOContext)
+    {
+      await Promise.resolve();
+      return this.failWithUnknownError('something went wrong');
+    }
+  }
+
+  const outcome = await new UnknownFailOp().run();
+  if (outcome.ok) throw new Error('Expected failure');
+  expect(outcome.failure).toBe('unknownError');
+  expect(outcome.debugData).toBe('something went wrong');
+});
+
+test('Op.cancel returns standard canceled failure', async () =>
+{
+  class CancelOp extends Op<never, 'canceled'>
+  {
+    name = 'CancelOp';
+    async run(_io?: IOContext)
+    {
+      await Promise.resolve();
+      return this.cancel();
+    }
+  }
+
+  const outcome = await new CancelOp().run();
+  expect(outcome).toEqual({ ok: false, failure: 'canceled' });
+});
+
+test('PrintOp with empty message succeeds', async () =>
+{
+  const op = new PrintOp('');
+  const outcome = await op.run();
+  expect(outcome).toEqual({ ok: true, value: '' });
+});
+
+test('PrintOp at exactly maxLength succeeds', async () =>
+{
+  const msg = 'a'.repeat(100);
+  const op = new PrintOp(msg, { maxLength: 100 });
+  const outcome = await op.run();
+  expect(outcome.ok).toBe(true);
+});

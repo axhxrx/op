@@ -276,3 +276,298 @@ test('ReplayableStdin emits replayed data to both data and readable consumers an
     await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+// =============================================================================
+// BufferedStdin edge cases
+// =============================================================================
+
+test('BufferedStdin.read returns null when buffer is empty', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  try
+  {
+    expect(stdin.read()).toBeNull();
+  }
+  finally
+  {
+    stdin.destroy();
+  }
+});
+
+test('BufferedStdin.read with size returns partial data', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  try
+  {
+    source.write('hello world');
+
+    // Read only 5 bytes
+    const chunk = stdin.read(5);
+    expect(chunk).toBeDefined();
+    expect(chunk!.toString()).toBe('hello');
+
+    // Remaining data should still be available
+    const rest = stdin.read();
+    expect(rest).toBeDefined();
+    expect(rest!.toString()).toBe(' world');
+  }
+  finally
+  {
+    stdin.destroy();
+  }
+});
+
+test('BufferedStdin.unshift puts data back at front of buffer', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  try
+  {
+    source.write('world');
+
+    // Read it
+    const chunk = stdin.read();
+    expect(chunk!.toString()).toBe('world');
+
+    // Push it back
+    stdin.unshift('hello ');
+    stdin.unshift(chunk!);
+
+    // Read both — unshifted items come first
+    const first = stdin.read();
+    const second = stdin.read();
+    expect(first!.toString()).toBe('world');
+    expect(second!.toString()).toBe('hello ');
+  }
+  finally
+  {
+    stdin.destroy();
+  }
+});
+
+test('BufferedStdin.setEncoding causes read to return strings', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  try
+  {
+    stdin.setEncoding('utf8');
+    source.write('hello');
+
+    const chunk = stdin.read();
+    expect(typeof chunk).toBe('string');
+    expect(chunk).toBe('hello');
+  }
+  finally
+  {
+    stdin.destroy();
+  }
+});
+
+test('BufferedStdin.destroy is idempotent', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  let closeCount = 0;
+  stdin.on('close', () => closeCount++);
+
+  stdin.destroy();
+  stdin.destroy(); // second destroy should be a no-op
+
+  expect(closeCount).toBe(1);
+});
+
+test('BufferedStdin.isTTY delegates to source', () =>
+{
+  const source = new PassThrough();
+  const nonTTY = new RecordableStdin(source);
+  expect(nonTTY.isTTY).toBe(false);
+  nonTTY.destroy();
+
+  const ttySource = Object.assign(new PassThrough(), { isTTY: true });
+  const ttyStdin = new RecordableStdin(ttySource);
+  expect(ttyStdin.isTTY).toBe(true);
+  ttyStdin.destroy();
+});
+
+// =============================================================================
+// RecordableStdin edge cases
+// =============================================================================
+
+test('RecordableStdin records multiple events with increasing timestamps', async () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  try
+  {
+    source.write('a');
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    source.write('b');
+
+    const recording = stdin.getRecording();
+    expect(recording).toHaveLength(2);
+    expect(recording[0]!.data).toBe('a');
+    expect(recording[1]!.data).toBe('b');
+    expect(recording[1]!.timestamp).toBeGreaterThanOrEqual(recording[0]!.timestamp);
+  }
+  finally
+  {
+    stdin.destroy();
+  }
+});
+
+test('RecordableStdin ignores data after destroy', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  source.write('before');
+  stdin.destroy();
+  source.write('after');
+
+  expect(stdin.getRecording()).toHaveLength(1);
+  expect(stdin.getRecording()[0]!.data).toBe('before');
+});
+
+test('RecordableStdin.getEventCount matches recording length', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  try
+  {
+    expect(stdin.getEventCount()).toBe(0);
+    source.write('a');
+    expect(stdin.getEventCount()).toBe(1);
+    source.write('b');
+    expect(stdin.getEventCount()).toBe(2);
+  }
+  finally
+  {
+    stdin.destroy();
+  }
+});
+
+test('RecordableStdin.setRawMode on non-TTY source is a no-op', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+
+  try
+  {
+    // Should not throw
+    const result = stdin.setRawMode(true);
+    expect(result).toBe(stdin); // returns this
+  }
+  finally
+  {
+    stdin.destroy();
+  }
+});
+
+// =============================================================================
+// ReplayableStdin edge cases
+// =============================================================================
+
+test('ReplayableStdin with empty session immediately switches to interactive', async () =>
+{
+  const tempDir = await mkdtemp(join(tmpdir(), 'replayable-stdin-empty-'));
+  const sessionPath = join(tempDir, 'session.json');
+  const source = new PassThrough();
+
+  const session: Session = {
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    events: [],
+  };
+
+  try
+  {
+    await writeFile(sessionPath, JSON.stringify(session), 'utf-8');
+    const stdin = await ReplayableStdin.create(sessionPath, source);
+
+    stdin.startReplay(0);
+    await waitFor(() => !stdin.isReplayActive());
+
+    // Should have switched to interactive — source data should flow through
+    const chunks: string[] = [];
+    stdin.on('data', (chunk: Buffer | string) => chunks.push(chunk.toString()));
+    source.write('live');
+
+    expect(chunks).toEqual(['live']);
+    stdin.destroy();
+  }
+  finally
+  {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('ReplayableStdin.startReplay when destroyed is a no-op', async () =>
+{
+  const tempDir = await mkdtemp(join(tmpdir(), 'replayable-stdin-destroyed-'));
+  const sessionPath = join(tempDir, 'session.json');
+  const source = new PassThrough();
+
+  const session: Session = {
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    events: [{ timestamp: 0, data: 'x' }],
+  };
+
+  try
+  {
+    await writeFile(sessionPath, JSON.stringify(session), 'utf-8');
+    const stdin = await ReplayableStdin.create(sessionPath, source);
+
+    stdin.destroy();
+    // Should not throw or emit data
+    stdin.startReplay(0);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    // If we get here without error, the no-op behavior is correct
+    expect(stdin.isReplayActive()).toBe(true); // still flagged as replaying since switchToInteractive never ran
+  }
+  finally
+  {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('ReplayableStdin.isReplayActive returns false after replay completes', async () =>
+{
+  const tempDir = await mkdtemp(join(tmpdir(), 'replayable-stdin-active-'));
+  const sessionPath = join(tempDir, 'session.json');
+  const source = new PassThrough();
+
+  const session: Session = {
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    events: [{ timestamp: 0, data: 'x' }],
+  };
+
+  try
+  {
+    await writeFile(sessionPath, JSON.stringify(session), 'utf-8');
+    const stdin = await ReplayableStdin.create(sessionPath, source);
+
+    expect(stdin.isReplayActive()).toBe(true);
+    stdin.startReplay(0);
+    await waitFor(() => !stdin.isReplayActive());
+    expect(stdin.isReplayActive()).toBe(false);
+
+    stdin.destroy();
+  }
+  finally
+  {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
