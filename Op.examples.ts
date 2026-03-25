@@ -63,9 +63,12 @@ export class FetchUserOp extends Op<
   FetchUserFailure
 >
 {
-  constructor(private userId: string)
+  private userId: string;
+
+  constructor(userId: string)
   {
     super();
+    this.userId = userId;
   }
 
   get name(): string

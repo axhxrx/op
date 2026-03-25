@@ -56,8 +56,11 @@ export class TeeStreamLogSink
   private refCount = 0;
   private closePromise?: Promise<void>;
 
-  constructor(private logPath: string)
+  private logPath: string;
+
+  constructor(logPath: string)
   {
+    this.logPath = logPath;
     this.logWriter = createWriteStream(logPath);
   }
 

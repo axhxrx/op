@@ -52,14 +52,16 @@ export interface PrintOpOptions
  */
 export class PrintOp extends Op<string, PrintOpFailure>
 {
+  private message: string;
   private options: PrintOpOptions;
 
   constructor(
-    private message: string,
+    message: string,
     options?: PrintOpOptions | string[], // Backward compat: string[] = prohibitedWords
   )
   {
     super();
+    this.message = message;
     // Backward compatibility: if options is an array, treat it as prohibitedWords
     if (Array.isArray(options))
     {
