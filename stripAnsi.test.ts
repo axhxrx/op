@@ -35,11 +35,11 @@ test('stripAnsi handles empty string', () =>
   expect(clean).toBe('');
 });
 
-test('stripAnsi handles complex Ink output', () =>
+test('stripAnsi handles complex terminal output', () =>
 {
-  // Typical Ink SelectInput output with cursor and colors
-  const inkOutput = '\u001b[36m❯\u001b[39m Option 1\n  Option 2\n  Option 3';
-  const clean = stripAnsi(inkOutput);
+  // Terminal output with cursor and colors
+  const terminalOutput = '\u001b[36m❯\u001b[39m Option 1\n  Option 2\n  Option 3';
+  const clean = stripAnsi(terminalOutput);
   expect(clean).toBe('❯ Option 1\n  Option 2\n  Option 3');
 });
 

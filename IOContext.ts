@@ -1,7 +1,7 @@
 import process from 'node:process';
 import type { OpRunnerArgs } from './args.ts';
 import { createDefaultLogger, type Logger } from './Logger.ts';
-import { RecordableStdin } from './RecordableStdin.ts';
+import { RecordableStdin, type StdinSource } from './RecordableStdin.ts';
 import { ReplayableStdin } from './ReplayableStdin.ts';
 import { TeeStream } from './TeeStream.ts';
 
@@ -11,7 +11,7 @@ import { TeeStream } from './TeeStream.ts';
  Allows switching between interactive, record, replay, and test modes
  */
 export type IOContext = {
-  stdin: NodeJS.ReadStream | RecordableStdin | ReplayableStdin;
+  stdin: StdinSource | RecordableStdin | ReplayableStdin;
   stdout: NodeJS.WriteStream | NodeJS.WritableStream;
   stderr: NodeJS.WriteStream | NodeJS.WritableStream;
   mode: 'interactive' | 'record' | 'replay' | 'test';
@@ -23,7 +23,7 @@ export type IOContext = {
 };
 
 export type IOContextStreams = {
-  stdin?: NodeJS.ReadStream;
+  stdin?: StdinSource;
   stdout?: NodeJS.WriteStream | NodeJS.WritableStream;
   stderr?: NodeJS.WriteStream | NodeJS.WritableStream;
 };
@@ -52,7 +52,7 @@ export async function createIOContext(
   streams: IOContextStreams = {},
 ): Promise<IOContext>
 {
-  const defaultStdin = streams.stdin ?? process.stdin;
+  const defaultStdin: StdinSource = streams.stdin ?? process.stdin;
   const defaultStdout = streams.stdout ?? process.stdout;
   const defaultStderr = streams.stderr ?? process.stderr;
 
@@ -70,13 +70,13 @@ export async function createIOContext(
   }
 
   // Create stdin - use RecordableStdin if recording, ReplayableStdin if replaying
-  let stdin: NodeJS.ReadStream | RecordableStdin | ReplayableStdin = defaultStdin;
+  let stdin: StdinSource | RecordableStdin | ReplayableStdin = defaultStdin;
   let recordableStdin: RecordableStdin | undefined;
   let replayableStdin: ReplayableStdin | undefined;
 
   if (config.mode === 'record')
   {
-    recordableStdin = new RecordableStdin();
+    recordableStdin = new RecordableStdin(defaultStdin);
     // RecordableStdin is compatible with ReadStream (implements EventEmitter interface)
     stdin = recordableStdin;
     writeLine(stdout, `[IOContext] 🔴 Recording input to: ${config.sessionFile}`);
@@ -87,7 +87,7 @@ export async function createIOContext(
     {
       throw new Error('[IOContext] --replay requires a session file');
     }
-    replayableStdin = await ReplayableStdin.create(config.sessionFile);
+    replayableStdin = await ReplayableStdin.create(config.sessionFile, defaultStdin);
     stdin = replayableStdin;
     // ReplayableStdin will print its own status messages
   }

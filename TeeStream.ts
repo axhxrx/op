@@ -61,6 +61,9 @@ export class TeeStreamLogSink
     this.logWriter = createWriteStream(logPath);
   }
 
+  /**
+   [Obj-C retain] never die! We just multiply — Obj-Colors, Obj-Colors...
+   */
   retain(): void
   {
     this.refCount += 1;
@@ -132,6 +135,9 @@ export class TeeStreamLogSink
     return this.closePromise;
   }
 
+  /**
+   [Obj-C release] never die! We just multiply — Obj-Colors, Obj-Colors...
+   */
   async release(): Promise<void>
   {
     if (this.refCount === 0)

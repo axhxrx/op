@@ -100,6 +100,26 @@ export class OpRunner<T extends Op<unknown, unknown>>
     }
   }
 
+  private async saveRecordedSession(filepath: string): Promise<void>
+  {
+    if (this.ioConfig.mode !== 'record')
+    {
+      this.io.logger.warn('[OpRunner] Cannot save session - not in record mode');
+      return;
+    }
+
+    const recordableStdin = this.io.recordableStdin;
+    if (!recordableStdin)
+    {
+      this.io.logger.warn('[OpRunner] Cannot save session - no recordable stdin available');
+      return;
+    }
+
+    const session = await recordableStdin.saveSession(filepath);
+    this.io.logger.log(`[RecordableStdin] 💾 Session saved to: ${filepath}`);
+    this.io.logger.log(`[RecordableStdin] 📊 Recorded ${session.events.length} input events`);
+  }
+
   /**
    * Format current stack state for logging
    */
@@ -303,66 +323,73 @@ export class OpRunner<T extends Op<unknown, unknown>>
    */
   async run(): Promise<OutcomeOf<T>>
   {
-    // Initialize log file
-    if (OpRunner.opLoggingEnabled)
+    try
     {
-      try
+      // Initialize log file
+      if (OpRunner.opLoggingEnabled)
       {
-        writeFileSync(OpRunner.logFilePath, ''); // Clear log file
+        try
+        {
+          writeFileSync(OpRunner.logFilePath, ''); // Clear log file
+        }
+        catch (error)
+        {
+          console.error(`[OpRunner] Failed to initialize log file: ${String(error)}`);
+        }
       }
-      catch (error)
+
+      if (OpRunner.opLoggingEnabled)
       {
-        console.error(`[OpRunner] Failed to initialize log file: ${String(error)}`);
+        this.logToFile('🚀 Starting execution');
+        this.logToFile(`Mode: ${this.io.mode}`);
+        const firstOp = this.stack[0];
+        if (firstOp && isOp(firstOp))
+        {
+          this.logToFile(`INITIAL PUSH ${firstOp.name}. Stack is now: ${this.formatStack()}`);
+        }
+        this.logToFile('');
       }
-    }
 
-    if (OpRunner.opLoggingEnabled)
-    {
-      this.logToFile('🚀 Starting execution');
-      this.logToFile(`Mode: ${this.io.mode}`);
-      const firstOp = this.stack[0];
-      if (firstOp && isOp(firstOp))
+      // Start replay if in replay mode
+      if (this.ioConfig.mode === 'replay' && this.io.replayableStdin)
       {
-        this.logToFile(`INITIAL PUSH ${firstOp.name}. Stack is now: ${this.formatStack()}`);
+        this.io.replayableStdin.startReplay(500); // 500ms delay
       }
-      this.logToFile('');
-    }
 
-    // Start replay if in replay mode
-    // Use a longer delay to ensure Ink has time to mount and attach listeners
-    if (this.ioConfig.mode === 'replay' && this.io.replayableStdin)
+      // Execute steps until stack is empty
+      while (await this.runStep())
+      {
+        // runStep() handles all the logic
+      }
+
+      const totalDuration = Date.now() - this.startTime;
+      if (OpRunner.opLoggingEnabled)
+      {
+        this.logToFile('🏁 Stack empty, execution complete!');
+        this.logToFile(`⏱️  Total time: ${totalDuration}ms`);
+        this.logToFile('');
+      }
+
+      // FIXME: Make the session recording flush every turn so the program doesn't have to succeed to write a log
+
+      // Save recorded session if in record mode
+      if (this.ioConfig.mode === 'record' && this.io.recordableStdin && this.ioConfig.sessionFile)
+      {
+        await this.saveRecordedSession(this.ioConfig.sessionFile);
+      }
+
+      if (this.finalOutcome === undefined)
+      {
+        throw new Error('[OpRunner] Execution completed without a terminal outcome');
+      }
+
+      return this.finalOutcome;
+    }
+    finally
     {
-      this.io.replayableStdin.startReplay(500); // 500ms delay
+      this.io.recordableStdin?.destroy();
+      this.io.replayableStdin?.destroy();
     }
-
-    // Execute steps until stack is empty
-    while (await this.runStep())
-    {
-      // runStep() handles all the logic
-    }
-
-    const totalDuration = Date.now() - this.startTime;
-    if (OpRunner.opLoggingEnabled)
-    {
-      this.logToFile('🏁 Stack empty, execution complete!');
-      this.logToFile(`⏱️  Total time: ${totalDuration}ms`);
-      this.logToFile('');
-    }
-
-    // FIXME: Make the session recording flush every turn so the program doesn't have to succeed to write a log
-
-    // Save recorded session if in record mode
-    if (this.ioConfig.mode === 'record' && this.io.recordableStdin && this.ioConfig.sessionFile)
-    {
-      await this.io.recordableStdin.saveSession(this.ioConfig.sessionFile);
-    }
-
-    if (this.finalOutcome === undefined)
-    {
-      throw new Error('[OpRunner] Execution completed without a terminal outcome');
-    }
-
-    return this.finalOutcome;
   }
 
   /**
@@ -432,19 +459,6 @@ export class OpRunner<T extends Op<unknown, unknown>>
    */
   async saveSession(filepath: string): Promise<void>
   {
-    if (this.ioConfig.mode !== 'record')
-    {
-      console.warn('[OpRunner] Cannot save session - not in record mode');
-      return;
-    }
-
-    const recordableStdin = this.io.recordableStdin;
-    if (!recordableStdin)
-    {
-      console.warn('[OpRunner] Cannot save session - no recordable stdin available');
-      return;
-    }
-
-    await recordableStdin.saveSession(filepath);
+    await this.saveRecordedSession(filepath);
   }
 }
