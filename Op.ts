@@ -1,6 +1,4 @@
-import process from 'node:process';
 import type { IOContext } from './IOContext.ts';
-import { createDefaultLogger } from './Logger.ts';
 import { OpRunner } from './OpRunner.ts';
 import {
   type Failure,
@@ -13,6 +11,7 @@ import {
   type RunResult,
   type Success,
 } from './Outcome.ts';
+import { SharedContext } from './SharedContext.ts';
 
 /**
  Abstract base class for ops.
@@ -42,21 +41,23 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
   abstract run(io?: IOContext): Promise<RunResult<SuccessT, FailureT>>;
 
   /**
+   Returns the default IOContext, if it exists, falling back to process `stdin`, `stdout, and `stderr` streams if not.
+
+   NOTE: This replaces the deprecated getIO() method, but it does not know anything about to to-be-removed `io` parameter of `Op`'s `run()` method. It is the responsibility of the caller to migrate from `getIO(io)` to `this.io` and ensure that `OpRunner.defaultIOContext` is set appropriately.
+   */
+  protected get io(): IOContext
+  {
+    return SharedContext.effectiveIOContext;
+  }
+
+  /**
    Get IO context, defaulting to process streams if not provided.
 
-   @deprecated The `io` parameter will be removed in a future version. Use `this.getIO()` with no arguments instead — `OpRunner.defaultIOContext` is set automatically.
+   @deprecated The `io` parameter will be removed in a future version. Use `this.io` with no arguments instead — but note the behavioral difference, if you are migrating old code that uses the `io` parameter.
    */
   protected getIO(io?: IOContext): IOContext
   {
-    return io
-      ?? OpRunner.defaultIOContext
-      ?? {
-        stdin: process.stdin,
-        stdout: process.stdout,
-        stderr: process.stderr,
-        mode: 'interactive',
-        logger: createDefaultLogger(),
-      };
+    return io ?? this.io;
   }
 
   /**
