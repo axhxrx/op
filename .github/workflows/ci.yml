@@ -27,12 +27,13 @@ jobs:
       - name: Test (Bun)
         run: bun test
 
+      # deno check is done locally but can't currently be done in CI because this repo is a git submodule of the main @axhxrx/megarepo and deno currently doesn't support ejected monorepo sublibraries, so it can't work here (T_T)
       - name: Lint (Deno)
         run: deno lint
 
       - name: JSR check
-        run: npx jsr publish --allow-dirty
-        
+        run: npx jsr publish --allow-dirty --dry-run
+
   # Only run if we're on main and the test job succeeded:
   publish:
     needs: [test]
@@ -44,7 +45,6 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v6
       - name: 'Publish package (if new version exists)'
         run: npx jsr publish --allow-dirty

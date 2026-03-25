@@ -12,14 +12,34 @@
  */
 type LoggerWriter = (message: string) => void;
 
+/**
+ Options for creating a `Logger` instance.
+ */
 export interface LoggerOptions
 {
+  /**
+  Optional namespace that will be used as a prefix for all log messages with (e.g. "[MyNamespace] message")
+   */
   namespace?: string;
+
+  /**
+   Allows you to provide custom writer functions for log, warn, and error messages. If not provided, defaults to console.log/warn/error. If you want separate custom writers for warn/error, you can provide `warnWriter` and `errorWriter` as well; otherwise if `logWriter` is provided, it will be used for those levels.
+   */
   logWriter?: LoggerWriter;
+
+  /**
+    Optional custom writer for warning messages. If not provided, defaults to console.warn.
+   */
   warnWriter?: LoggerWriter;
+  /**
+    Optional custom writer for error messages. If not provided, defaults to console.error.
+   */
   errorWriter?: LoggerWriter;
 }
 
+/**
+ Simple namespaced logger that wraps `console` with optional custom writers. Supports hierarchical namespaces via `child()`.
+ */
 export class Logger
 {
   private namespace?: string;
@@ -57,9 +77,10 @@ export class Logger
   {
     const prefix = this.namespace ? `[${this.namespace}] ` : '';
     const text = prefix + message;
-    if (this.warnWriter)
+    const writer = this.warnWriter || this.logWriter;
+    if (writer)
     {
-      this.warnWriter(text);
+      writer(text);
       return;
     }
     console.warn(text);
@@ -72,9 +93,10 @@ export class Logger
   {
     const prefix = this.namespace ? `[${this.namespace}] ` : '';
     const text = prefix + message;
-    if (this.errorWriter)
+    const writer = this.errorWriter || this.logWriter;
+    if (writer)
     {
-      this.errorWriter(text);
+      writer(text);
       return;
     }
     console.error(text);

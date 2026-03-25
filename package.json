@@ -1,6 +1,6 @@
 {
   "name": "@axhxrx/op",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "type": "module",
   "exports": "./mod.ts",
   "license": "MIT",

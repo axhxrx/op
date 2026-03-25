@@ -24,6 +24,9 @@ export interface Failure<T>
   debugData?: string;
 }
 
+/**
+ Extract the `failure` from a `Failure` outcome.
+ */
 export type UnwrapFailure<T> = T extends Failure<infer F> ? F : never;
 
 /**
@@ -154,6 +157,9 @@ export type RunResult<SuccessT, FailureT> =
   | Outcome<SuccessT, FailureT>
   | ControlValue<Outcome<SuccessT, FailureT>>;
 
+/**
+ Type guard that checks whether a value is a `Success` outcome.
+ */
 export function isSuccess(value: unknown): value is Success<unknown>
 {
   return (
@@ -165,6 +171,9 @@ export function isSuccess(value: unknown): value is Success<unknown>
   );
 }
 
+/**
+ Type guard that checks whether a value is a `Failure` outcome.
+ */
 export function isFailure(value: unknown): value is Failure<unknown>
 {
   return (
@@ -176,11 +185,17 @@ export function isFailure(value: unknown): value is Failure<unknown>
   );
 }
 
+/**
+ Type guard that checks whether a value is any `Outcome` (either `Success` or `Failure`).
+ */
 export function isOutcome(value: unknown): value is AnyOutcome
 {
   return isSuccess(value) || isFailure(value);
 }
 
+/**
+ Type guard that checks whether a value is a `ReplaceOp` control-flow signal.
+ */
 export function isReplaceOp(value: unknown): value is ReplaceOp<AnyOutcome>
 {
   return (
@@ -192,6 +207,9 @@ export function isReplaceOp(value: unknown): value is ReplaceOp<AnyOutcome>
   );
 }
 
+/**
+ Type guard that checks whether a value is an `OpWithHandler` control-flow signal.
+ */
 export function isOpWithHandler(value: unknown): value is OpWithHandler<Op<unknown, unknown>, AnyOutcome>
 {
   return (

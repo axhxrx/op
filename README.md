@@ -58,4 +58,6 @@ MIT
 
 ## Happenings
 
-2026-03-25 🍼 0.9.1 initial public release (although this is a rewrite of a rewrite of a rewrite of a rewrite, so there's hopefully nothing new or novel in here...)
+- 2026-03-25 📦 0.9.2 — improve docks and publishing automation
+
+- 2026-03-25 🍼 0.9.1 — initial public release (although this is a rewrite of a rewrite of a rewrite of a rewrite, so there's hopefully nothing new or novel in here...)
