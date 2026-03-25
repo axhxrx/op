@@ -169,7 +169,7 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
 
    Original note (for inferred return types): don't forget to use `as const` to preserve literal type of `failure` or you will lose strong exhaustive typing of the possible failures.
    */
-  fail<F>(failure: F, debugData?: string): Failure<F>
+  protected fail<F>(failure: F, debugData?: string): Failure<F>
   {
     return { ok: false, failure, debugData };
   }
@@ -177,7 +177,7 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
   /**
    The error of last resort
    */
-  failWithUnknownError(debugData?: string): Failure<'unknownError'>
+  protected failWithUnknownError(debugData?: string): Failure<'unknownError'>
   {
     return { ok: false, failure: 'unknownError', debugData };
   }
@@ -192,7 +192,7 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
    - User sends interrupt signal (Ctrl+C is handled by framework)
    - Operation times out (if implementing timeout logic)
    */
-  cancel(): Failure<'canceled'>
+  protected cancel(): Failure<'canceled'>
   {
     return { ok: false, failure: 'canceled' };
   }
