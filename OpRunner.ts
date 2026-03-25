@@ -56,7 +56,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
   protected static _default?: OpRunner<Op<unknown, unknown>>;
 
   /**
-   This reference is stored maninly for debugging.
+   This reference is stored mainly for debugging.
    */
   protected static get default(): OpRunner<Op<unknown, unknown>> | undefined
   {
@@ -100,9 +100,8 @@ export class OpRunner<T extends Op<unknown, unknown>>
       {
         appendFileSync(OpRunner.logFilePath, logLine);
       }
-      catch (error)
+      catch (error: unknown)
       {
-        // Silently fail if we can't write to log file
         console.error(`[OpRunner] Failed to write to log file: ${String(error)}`);
       }
     }
@@ -339,7 +338,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
         {
           writeFileSync(OpRunner.logFilePath, ''); // Clear log file
         }
-        catch (error)
+        catch (error: unknown)
         {
           console.error(`[OpRunner] Failed to initialize log file: ${String(error)}`);
         }

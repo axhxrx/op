@@ -8,10 +8,12 @@ import { Op } from './Op.ts';
 class CancelableOp extends Op<string, 'canceled'>
 {
   name = 'CancelableOp';
+  private shouldCancel: boolean;
 
-  constructor(private shouldCancel: boolean)
+  constructor(shouldCancel: boolean)
   {
     super();
+    this.shouldCancel = shouldCancel;
   }
 
   async run(_io?: IOContext)

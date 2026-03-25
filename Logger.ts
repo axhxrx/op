@@ -85,7 +85,7 @@ export class Logger
 
    @example
    ```typescript
-   const parent = new Logger('App');
+   const parent = new Logger({ namespace: 'App' });
    const child = parent.child('Database');
 
    parent.log('Starting'); // [App] Starting

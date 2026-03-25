@@ -120,10 +120,10 @@ test('RecordableStdin skips persisted chunks while InputRecording is disabled', 
   {
     source.write('public-1');
 
-    InputRecording.disabled = true;
+    InputRecording.prohibit();
     source.write('secret');
 
-    InputRecording.disabled = false;
+    InputRecording.removeProhibition();
     source.write('public-2');
 
     expect(dataChunks).toEqual(['public-1', 'secret', 'public-2']);
@@ -140,7 +140,10 @@ test('RecordableStdin skips persisted chunks while InputRecording is disabled', 
   }
   finally
   {
-    InputRecording.disabled = false;
+    while (InputRecording.disabled)
+    {
+      InputRecording.removeProhibition();
+    }
     stdin.destroy();
   }
 });

@@ -4,7 +4,7 @@ import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import type { Failure, Success } from './Outcome.ts';
 
-export type PrintOpOutcome = Success<string> | Failure<'ProhibitedWord'> | Failure<'MessageTooLong'> | Failure<
+type PrintOpOutcome = Success<string> | Failure<'ProhibitedWord'> | Failure<'MessageTooLong'> | Failure<
   'unknownError'
 >;
 
@@ -52,14 +52,16 @@ export interface PrintOpOptions
  */
 export class PrintOp extends Op<string, PrintOpFailure>
 {
+  private message: string;
   private options: PrintOpOptions;
 
   constructor(
-    private message: string,
+    message: string,
     options?: PrintOpOptions | string[], // Backward compat: string[] = prohibitedWords
   )
   {
     super();
+    this.message = message;
     // Backward compatibility: if options is an array, treat it as prohibitedWords
     if (Array.isArray(options))
     {
@@ -101,7 +103,7 @@ export class PrintOp extends Op<string, PrintOpFailure>
       stdout.write(this.message);
       return this.succeed(this.message);
     }
-    catch (error)
+    catch (error: unknown)
     {
       // Catch-all for unexpected errors
       return this.failWithUnknownError(String(error));

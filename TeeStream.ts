@@ -56,8 +56,11 @@ export class TeeStreamLogSink
   private refCount = 0;
   private closePromise?: Promise<void>;
 
-  constructor(private logPath: string)
+  private logPath: string;
+
+  constructor(logPath: string)
   {
+    this.logPath = logPath;
     this.logWriter = createWriteStream(logPath);
   }
 
@@ -336,7 +339,7 @@ export class TeeStream extends Writable
         (error: unknown) => callback(error as Error),
       );
     }
-    catch (error)
+    catch (error: unknown)
     {
       callback(error as Error);
     }
@@ -351,7 +354,7 @@ export class TeeStream extends Writable
     {
       this.releaseLogSink(callback);
     }
-    catch (error)
+    catch (error: unknown)
     {
       callback(error as Error);
     }
@@ -369,9 +372,9 @@ export class TeeStream extends Writable
         callback((releaseError as Error | null | undefined) ?? error);
       });
     }
-    catch (err)
+    catch (error: unknown)
     {
-      callback(err as Error);
+      callback(error as Error);
     }
   }
 

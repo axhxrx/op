@@ -170,12 +170,14 @@ class CalculateOp extends Op<
   'NegativeInput' | 'InputTooLarge' | 'unknownError'
 >
 {
-  constructor(
-    private a: number,
-    private b: number,
-  )
+  private a: number;
+  private b: number;
+
+  constructor(a: number, b: number)
   {
     super();
+    this.a = a;
+    this.b = b;
   }
 
   get name(): string

@@ -5,6 +5,7 @@ export type InputChunk = Buffer | string;
 
 export type StdinSource = NodeJS.ReadableStream & {
   isTTY?: boolean;
+  isRaw?: boolean;
   setRawMode?: (mode: boolean) => void;
   setEncoding?: (encoding: NodeJS.BufferEncoding) => void;
   ref?: () => void;
@@ -136,9 +137,9 @@ export abstract class BufferedStdin extends EventEmitter
     return this.stdinSource.isTTY ?? false;
   }
 
-  get isRawModeSupported(): boolean
+  get isRaw(): boolean
   {
-    return this.stdinSource.isTTY ?? false;
+    return this.stdinSource.isRaw ?? false;
   }
 
   read(size?: number): Buffer | string | null
