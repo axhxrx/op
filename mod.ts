@@ -6,12 +6,12 @@ export * from './Outcome.ts';
 // IO
 export type { IOContext } from './IOContext.ts';
 export { createIOContext } from './IOContext.ts';
-export { Logger, createDefaultLogger } from './Logger.ts';
+export { createDefaultLogger, Logger } from './Logger.ts';
 
 // Type guards
-export { isOp } from './isOp.ts';
 export { isHandler } from './HandlerWithMeta.ts';
 export type { HandlerWithMeta } from './HandlerWithMeta.ts';
+export { isOp } from './isOp.ts';
 
 // Args
 export { parseOpRunnerArgs } from './args.ts';
@@ -23,15 +23,15 @@ export type { InputEvent, Session } from './RecordableStdin.ts';
 export { ReplayableStdin } from './ReplayableStdin.ts';
 
 // I/O utilities
+export { hasAnsi, stripAnsi, stripAnsiFromLines } from './stripAnsi.ts';
 export { TeeStream } from './TeeStream.ts';
 export type { TeeStreamOptions } from './TeeStream.ts';
-export { stripAnsi, stripAnsiFromLines, hasAnsi } from './stripAnsi.ts';
 
 // Simple op
 export { PrintOp } from './PrintOp.ts';
 export type { PrintOpOptions } from './PrintOp.ts';
 
 // Entry points
-export { main } from './main.ts';
 export { init } from './init.ts';
 export type { InitResult } from './init.ts';
+export { main } from './main.ts';

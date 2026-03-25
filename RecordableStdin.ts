@@ -141,12 +141,12 @@ export class RecordableStdin extends EventEmitter
   }
 
   // Readable stream interface
-  read(size?: number): any
+  read(size?: number): Buffer | string | null
   {
     return process.stdin.read(size);
   }
 
-  unshift(chunk: any): void
+  unshift(chunk: Buffer | string): void
   {
     if ('unshift' in process.stdin && typeof process.stdin.unshift === 'function')
     {

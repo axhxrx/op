@@ -1,3 +1,4 @@
+import process from 'node:process';
 import type { OpRunnerArgs } from './args.ts';
 import { createDefaultLogger, type Logger } from './Logger.ts';
 import { RecordableStdin } from './RecordableStdin.ts';

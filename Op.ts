@@ -14,14 +14,13 @@ export abstract class Op
 
    This type-fu avoids the `Cannot create an instance of an abstract class` error.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public static async run<ThisT extends new(...args: any[]) => Op>(
+  public static async run<ThisT extends new(...args: never[]) => Op>(
     this: ThisT,
     ...args: ConstructorParameters<ThisT>
-  )
+  ): Promise<Awaited<ReturnType<InstanceType<ThisT>['run']>>>
   {
     const op = new this(...args);
-    return await op.run() as ReturnType<InstanceType<ThisT>['run']>;
+    return await op.run() as Awaited<ReturnType<InstanceType<ThisT>['run']>>;
   }
 
   abstract name: string;

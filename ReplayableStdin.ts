@@ -2,6 +2,7 @@
 import { Buffer } from 'node:buffer';
 import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
+import process from 'node:process';
 import type { InputEvent, Session } from './RecordableStdin.ts';
 /**
  ReplayableStdin - Replays recorded user input, then switches to interactive mode once session replay finishes.
@@ -196,7 +197,7 @@ export class ReplayableStdin extends EventEmitter
     return process.stdin.isTTY ?? false;
   }
 
-  read(size?: number): any
+  read(size?: number): Buffer | string | null
   {
     // During replay, return buffered data
     if (this.isReplaying && this.readBuffer.length > 0)
@@ -206,7 +207,7 @@ export class ReplayableStdin extends EventEmitter
       {
         console.log(`[ReplayableStdin] 📖 read() called, returning: ${JSON.stringify(buffer?.toString())}`);
       }
-      return buffer;
+      return buffer ?? null;
     }
 
     // After replay, read from real stdin
@@ -219,7 +220,7 @@ export class ReplayableStdin extends EventEmitter
     return null;
   }
 
-  unshift(chunk: any): void
+  unshift(chunk: Buffer | string): void
   {
     if ('unshift' in process.stdin && typeof process.stdin.unshift === 'function')
     {
@@ -254,12 +255,14 @@ export class ReplayableStdin extends EventEmitter
   }
 
   // Override on/addListener to see when Ink attaches
+  // deno-lint-ignore no-explicit-any
   override on(event: string, listener: (...args: any[]) => void): this
   {
     if (ReplayableStdin.DEBUG) console.log(`[ReplayableStdin] 👂 Listener attached for '${event}'`);
     return super.on(event, listener);
   }
 
+  // deno-lint-ignore no-explicit-any
   override addListener(event: string, listener: (...args: any[]) => void): this
   {
     if (ReplayableStdin.DEBUG) console.log(`[ReplayableStdin] 👂 addListener called for '${event}'`);

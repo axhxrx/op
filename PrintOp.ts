@@ -2,6 +2,11 @@
 
 import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
+import type { Failure, Success } from './Outcome.ts';
+
+export type PrintOpOutcome = Success<string> | Failure<'ProhibitedWord'> | Failure<'MessageTooLong'> | Failure<
+  'unknownError'
+>;
 
 /**
  * Options for PrintOp
@@ -69,7 +74,7 @@ export class PrintOp extends Op
     return `PrintOp`;
   }
 
-  async run(io?: IOContext)
+  async run(io?: IOContext): Promise<PrintOpOutcome>
   {
     const { stdout } = this.getIO(io);
 
