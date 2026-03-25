@@ -36,6 +36,7 @@ export class ReplayableStdin extends BufferedStdin
   private startTime: number;
   private replayTimeout?: ReturnType<typeof setTimeout>;
   private interactiveListenersAttached = false;
+  private pendingRawMode?: boolean;
 
   private readonly handleInteractiveData = (data: InputChunk): void =>
   {
@@ -212,9 +213,9 @@ export class ReplayableStdin extends BufferedStdin
 
     this.isReplaying = false;
 
-    if (this.stdinSource.isTTY && this.stdinSource.setRawMode)
+    if (this.pendingRawMode !== undefined && this.stdinSource.isTTY && this.stdinSource.setRawMode)
     {
-      this.stdinSource.setRawMode(true);
+      this.stdinSource.setRawMode(this.pendingRawMode);
     }
     this.stdinSource.resume();
     this.attachInteractiveListeners();
@@ -260,7 +261,13 @@ export class ReplayableStdin extends BufferedStdin
 
   setRawMode(mode: boolean): this
   {
-    if (!this.isReplaying && this.stdinSource.isTTY && this.stdinSource.setRawMode)
+    if (this.isReplaying)
+    {
+      this.pendingRawMode = mode;
+      return this;
+    }
+
+    if (this.stdinSource.isTTY && this.stdinSource.setRawMode)
     {
       this.stdinSource.setRawMode(mode);
     }

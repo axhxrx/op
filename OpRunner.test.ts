@@ -835,6 +835,59 @@ describe('Edge Cases', () =>
     expect(runner.getStackDepth()).toBe(0);
   });
 
+  test('runStep returns false on empty stack', async () =>
+  {
+    const op = new ScriptedOp('Op', [{ type: 'succeed', value: 'done' }]);
+    const runner = await OpRunner.create(op, { mode: 'test' });
+
+    // Run to completion
+    await runner.run();
+
+    // Now stack is empty, runStep should return false
+    expect(await runner.runStep()).toBe(false);
+  });
+
+  test('Op returning invalid result throws', async () =>
+  {
+    // Craft an op that returns something that's not an outcome or control value
+    const badOp = new ScriptedOp('BadOp', []);
+    // Override run to return garbage
+    badOp.run = () => Promise.resolve('not a valid result' as never);
+
+    const runner = await OpRunner.create(badOp, { mode: 'test' });
+    await expect(runner.run()).rejects.toThrow('returned an invalid result');
+  });
+
+  test('OpRunner.defaultIOContext is set after create()', async () =>
+  {
+    const op = new ScriptedOp('Op', [{ type: 'succeed', value: 'done' }]);
+    await OpRunner.create(op, { mode: 'test' });
+
+    const io = OpRunner.defaultIOContext;
+    expect(io).toBeDefined();
+    expect(io!.mode).toBe('test');
+  });
+
+  test('getStackContents returns typed entries', async () =>
+  {
+    const child = new ScriptedOp('Child', [{ type: 'succeed', value: 'done' }]);
+    const parent = new ScriptedOp('Parent', [
+      { type: 'handleOutcome', child },
+      { type: 'succeed', value: 'done' },
+    ]);
+
+    const runner = await OpRunner.create(parent, { mode: 'test' });
+
+    // Run one step to get handler + child on stack
+    await runner.runStep();
+
+    const contents = runner.getStackContents();
+    expect(contents).toEqual([
+      { type: 'handler', name: 'Handler<Parent>' },
+      { type: 'op', name: 'Child' },
+    ]);
+  });
+
   test('Very deep nesting (10+ levels)', async () =>
   {
     // Build a chain: A → B → C → ... → J (10 levels deep)

@@ -219,3 +219,39 @@ test('TeeStream.createPair routes terminal output separately and serializes log 
     await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test('TeeStream with stripAnsi option strips ANSI from log but preserves in terminal', async () =>
+{
+  const tempDir = await mkdtemp(join(tmpdir(), 'tee-stream-strip-'));
+  const logFile = join(tempDir, 'strip.log');
+  const terminalStream = new PassThrough();
+  let terminalOutput = '';
+  terminalStream.setEncoding('utf8');
+  terminalStream.on('data', (chunk: string) =>
+  {
+    terminalOutput += chunk;
+  });
+
+  const teeStream = new TeeStream(logFile, { stripAnsi: true }, terminalStream);
+
+  try
+  {
+    const colored = '\x1b[31mRed text\x1b[0m\n';
+    await writeChunk(teeStream, colored);
+    await endTeeStream(teeStream);
+
+    // Terminal should have ANSI codes
+    expect(terminalOutput).toBe(colored);
+
+    // Log should have ANSI stripped
+    const logLines = (await readFile(logFile, 'utf8'))
+      .split('\n')
+      .filter(Boolean)
+      .map(stripTimestampPrefix);
+    expect(logLines).toEqual(['Red text']);
+  }
+  finally
+  {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});

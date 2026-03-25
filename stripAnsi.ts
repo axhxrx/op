@@ -25,13 +25,15 @@
 export function stripAnsi(text: string): string
 {
   // ANSI escape code pattern
-  // Matches: ESC [ ... m (SGR - Select Graphic Rendition)
-  //          ESC [ ... (various cursor and display commands)
-  //          ESC ] ... (Operating System Command)
-  //          Other escape sequences
+  // Matches: ESC [ ... (CSI sequences — colors, cursor, screen, bracketed paste, etc.)
+  //          ESC ] ... BEL (Operating System Command)
+  //          ESC = / ESC > (keypad mode)
+  //          ESC ( / ESC ) (character set selection)
+  // The CSI branch allows optional parameter prefix (? > !) for private sequences like
+  // \x1b[?25h (show cursor), \x1b[?1049h (alt screen), \x1b[?2004h (bracketed paste).
   // eslint-disable-next-line no-control-regex
   // deno-lint-ignore no-control-regex
-  const ansiPattern = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[=>]|\x1b[()][AB0-2]/g;
+  const ansiPattern = /\x1b\[[?!>]?[0-9;:]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[=>]|\x1b[()][AB0-2]/g;
 
   return text.replace(ansiPattern, '');
 }
@@ -57,6 +59,6 @@ export function hasAnsi(text: string): boolean
 {
   // eslint-disable-next-line no-control-regex
   // deno-lint-ignore no-control-regex
-  const ansiPattern = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[=>]|\x1b[()][AB0-2]/;
+  const ansiPattern = /\x1b\[[?!>]?[0-9;:]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[=>]|\x1b[()][AB0-2]/;
   return ansiPattern.test(text);
 }

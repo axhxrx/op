@@ -55,18 +55,26 @@ export class OpRunner<T extends Op<unknown, unknown>>
 
   protected static _default?: OpRunner<Op<unknown, unknown>>;
 
-  static get default(): OpRunner<Op<unknown, unknown>> | undefined
+  /**
+   This reference is stored maninly for debugging.
+   */
+  protected static get default(): OpRunner<Op<unknown, unknown>> | undefined
   {
     return this._default;
   }
 
+  /**
+   The "default IOContext" is just the IO context of the last-created OpRunner instance. This is to reduce required boilerplate in the simplest use cases, e.g., where an op is created and run, and that's it. In a normal application, there should typically be only one OpRunner instance, so this is not a problem. But it's global mutable state, so it's a bit hacky and something to be aware of if doing something unusual like creating multiple OpRunner instances in the same process.
+   */
   static get defaultIOContext(): IOContext | undefined
   {
     return this._default?.io;
   }
 
   /**
-   * Create an OpRunner instance (async because IO setup may be async)
+   Create an OpRunner instance (async because IO setup may be async). This is the only way to create an OpRunner, the constructor is private.
+
+   As side effect, this also updates the `OpRunner.defaultIOContext` reference (it just points to the last created instance), which is used  by ops that want to access "the current IOContext" without having it passed in — this is hacky, but it supports the simple case of "I just want to run this op and have it access stdin/stdout" without having to thread the IOContext through every call. A future version of this library may improve this.
    */
   static async create<T extends Op<unknown, unknown>>(
     initialOp: T,
@@ -80,7 +88,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
   }
 
   /**
-   * Log to file with timestamp
+   Log to file with timestamp
    */
   private logToFile(message: string): void
   {
@@ -121,7 +129,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
   }
 
   /**
-   * Format current stack state for logging
+   Format current stack state for logging
    */
   private formatStack(): string
   {
@@ -143,10 +151,9 @@ export class OpRunner<T extends Op<unknown, unknown>>
   /**
    Execute one step of the op stack
 
-   Returns false when stack is empty (execution complete)
-   Returns true when there are more ops to execute
+   Returns false when stack is empty (execution complete). Returns true when there are more ops to execute.
 
-   Useful for testing to inspect stack state between steps
+   Useful for testing to inspect stack state between steps.
    */
   async runStep(): Promise<boolean>
   {
@@ -445,17 +452,17 @@ export class OpRunner<T extends Op<unknown, unknown>>
   }
 
   /**
-   * Save recorded session to file (only works if mode is 'record')
-   *
-   * @param filepath - Path to save the session file
-   * @returns Promise that resolves when session is saved
-   *
-   * @example
-   * ```typescript
-   * const runner = await OpRunner.create(myOp, { mode: 'record', sessionFile: 'session.json' });
-   * await runner.run();
-   * await runner.saveSession('session.json');
-   * ```
+   Save recorded session to file (only works if mode is 'record')
+
+   @param filepath - Path to save the session file
+   @returns Promise that resolves when session is saved
+
+   @example
+   ```typescript
+   const runner = await OpRunner.create(myOp, { mode: 'record', sessionFile: 'session.json' });
+   await runner.run();
+   await runner.saveSession('session.json');
+   ```
    */
   async saveSession(filepath: string): Promise<void>
   {

@@ -37,6 +37,10 @@ export function parseOpRunnerArgs(args: string[]): {
     {
       case '--record':
       {
+        if (opRunner.mode === 'replay')
+        {
+          throw new Error('--record and --replay cannot be used together');
+        }
         const file = args[++i];
         if (!file)
         {
@@ -49,6 +53,10 @@ export function parseOpRunnerArgs(args: string[]): {
 
       case '--replay':
       {
+        if (opRunner.mode === 'record')
+        {
+          throw new Error('--record and --replay cannot be used together');
+        }
         const file = args[++i];
         if (!file)
         {

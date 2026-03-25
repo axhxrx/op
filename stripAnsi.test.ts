@@ -72,3 +72,23 @@ test('stripAnsi preserves emoji and unicode', () =>
   const clean = stripAnsi(withEmoji);
   expect(clean).toBe('🎉 Success! 👍');
 });
+
+test('stripAnsi removes cursor show/hide (private CSI with ? prefix)', () =>
+{
+  const showCursor = '\x1b[?25h';
+  const hideCursor = '\x1b[?25l';
+  expect(stripAnsi(`before${hideCursor}after`)).toBe('beforeafter');
+  expect(stripAnsi(`before${showCursor}after`)).toBe('beforeafter');
+  expect(hasAnsi(showCursor)).toBe(true);
+  expect(hasAnsi(hideCursor)).toBe(true);
+});
+
+test('stripAnsi removes alternate screen and bracketed paste sequences', () =>
+{
+  const altScreenOn = '\x1b[?1049h';
+  const altScreenOff = '\x1b[?1049l';
+  const bracketedPasteOn = '\x1b[?2004h';
+  const bracketedPasteOff = '\x1b[?2004l';
+  const input = `${altScreenOn}content${bracketedPasteOn}pasted${bracketedPasteOff}more${altScreenOff}`;
+  expect(stripAnsi(input)).toBe('contentpastedmore');
+});
