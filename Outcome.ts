@@ -26,7 +26,7 @@ export interface Failure<T>
 
 export type UnwrapFailure<T> = T extends Failure<infer F> ? F : never;
 
-/*
+/**
  The `Outcome` type represents the outcome of an op. An op is the fundamental unit of work, and it can either succeed, or fail.
 
  If the op succeeds, the `Outcome` is a `Success`, which contains the value of the op.

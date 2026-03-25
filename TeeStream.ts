@@ -372,9 +372,9 @@ export class TeeStream extends Writable
         callback((releaseError as Error | null | undefined) ?? error);
       });
     }
-    catch (err)
+    catch (error)
     {
-      callback(err as Error);
+      callback(error as Error);
     }
   }
 

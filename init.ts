@@ -30,7 +30,7 @@ export type InitResult = {
 
  @example
  ```typescript
- import { init } from '@axhxrx/ops';
+ import { init } from '@axhxrx/op';
 
  const { args, opsMain } = init(Deno.args);
 

@@ -195,7 +195,7 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
     return {
       [OP_CONTROL]: 'child',
       op,
-      handler: handler || defaultHandler,
+      handler: handler ?? defaultHandler,
     };
   }
 

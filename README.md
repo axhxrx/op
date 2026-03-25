@@ -1,56 +1,38 @@
 # @axhxrx/op
 
-Minimal, zero-dependency core of the Ops Pattern — a composable, generally stack-based architecture for TypeScript applications where every action is an Op.
+A minimal implentation the Ops Pattern — a composable, generally stack-based architecture for TypeScript applications where every action is an Op.
+
+## The Ops Pattern
+
+The Ops Pattern is a set of constraints and simplifications that reduces the number of decisions that need to — or can be — made about application architecture.
+
+It is intended to constrain "AI" coding agents in ways that help them more reliably produce consistent, usable output.
+
+Every action — basic UI interactions, making API calls, executing subcommands, processsing files, arbitrary business logic — is implemented as an **`Op`** that returns a standardized **`Outcome`**.
 
 ## What's an Op?
 
-An Op is a unit of work that returns a strongly-typed `Outcome<SuccessT, FailureT>`. By default, Ops compose via a stack-based runner, support record/replay of interactive sessions, and are independently testable. (They can also be organized in other ways, e.g. direct invocation, without using the OpRunner; they are essentially just functions, but with more constraints on how they can be defined.)
+An Op is a unit of work that returns a strongly-typed `Outcome<SuccessT, FailureT>`.
 
-```typescript
-import { Op, type IOContext } from "@axhxrx/op";
+Ops normally compose via a stack-based runner, which supports record/replay of interactive sessions. This enables bots to adopt the role of the user, operate the software being built, and interactively test it, creating their own feedback loops. This, combined with extensive use of TypeScript's type system and exhaustive-type checking, seems to give them the tools they need to produce better code.
 
-class GreetOp extends Op {
-  name = "GreetOp";
+Ops are often also independently executable as standalone CLI tools.
 
-  constructor(private who: string) {
-    super();
-  }
+The main point of them is that they force as much of the software as possible into the same basic pattern, which is not super-annoying for a human (it might a little bit annoying, though) and seems to provide the simplicity and testability to make it easier for LLMs to do... whatever it is they do that seems like _reasoning_, about the code.
 
-  async run() {
-    if (!this.who) {
-      return this.fail("NoName" as const);
-    }
-    return this.succeed(`Hello, ${this.who}!`);
-  }
-}
+It's a pattern that has yielded better useful results, and fewer useless or harmful results, from 2025-era coding LLMs like GPT5-Codex and Claude Sonnet 4.5 (and others), and continues to yield good results for us with more recent models.
 
-const outcome = await GreetOp.run("world");
-if (outcome.ok) {
-  console.log(outcome.value); // "Hello, world!"
-}
-```
+## Examples
 
-Failures are exhaustively checkable:
+_Description forthcoming._
 
-```typescript
-if (!outcome.ok) {
-  switch (outcome.failure) {
-    case "NoName":
-      /* handle */ break;
-    // TypeScript errors if you miss a case
-  }
-}
-```
+## Security note: disable recording when capturing passwords or sensitive data
 
-## Core Concepts
+The record/replay mechnanism provided by this library is very useful, but it also records all inputs to a non-encrypted file on disk. You don't want to do this if your CLI program (or whatever you're building) prompts the user for a password, or token, etc.
 
-- **Op** — abstract base class; implement `name` and `run()`
-- **Outcome** — `Success<T> | Failure<F>`, the universal return type
-- **OpRunner** — stack-based executor with logging and observability
-- **IOContext** — injectable stdin/stdout with record/replay modes
-- **RecordableStdin / ReplayableStdin** — capture and replay interactive sessions for deterministic testing
+To disable capture temporarily, use 
 
-## Usage
+
 
 ```typescript
 import { init } from "@axhxrx/op";
@@ -68,15 +50,15 @@ Replay it: `./my-app --replay session.json`
 ```typescript
 import { InputRecording } from "@axhxrx/op";
 
-InputRecording.disabled = true;
+InputRecording.prohibit();
 try {
   await promptForPassword();
 } finally {
-  InputRecording.disabled = false;
+  InputRecording.removeProhibition();
 }
 ```
 
-Disabled input still reaches your app normally, but it is omitted from the recorded session.
+Prohibitions nest safely. Sensitive input still reaches your app normally, but it is omitted from the recorded session.
 
 ## Runtime
 

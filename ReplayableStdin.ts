@@ -291,4 +291,14 @@ export class ReplayableStdin extends BufferedStdin
     }
     return this;
   }
+
+  override get isRaw(): boolean
+  {
+    if (this.isReplaying && this.pendingRawMode !== undefined)
+    {
+      return this.pendingRawMode;
+    }
+
+    return super.isRaw;
+  }
 }
