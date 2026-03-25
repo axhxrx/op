@@ -35,10 +35,16 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
   }
 
   abstract name: string;
+
+  /**
+   @deprecated The `io` parameter will be removed in a future version. Ops should access the IOContext via `this.getIO()` (no args) instead. OpRunner sets `OpRunner.defaultIOContext` automatically, so the explicit parameter is redundant during normal execution.
+   */
   abstract run(io?: IOContext): Promise<RunResult<SuccessT, FailureT>>;
 
   /**
-   Get IO context, defaulting to process streams if not provided
+   Get IO context, defaulting to process streams if not provided.
+
+   @deprecated The `io` parameter will be removed in a future version. Use `this.getIO()` with no arguments instead — `OpRunner.defaultIOContext` is set automatically.
    */
   protected getIO(io?: IOContext): IOContext
   {
@@ -54,40 +60,70 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
   }
 
   /**
-   * Convenience method for logging from ops
-   * Uses the logger from IOContext
-   *
-   * @example
-   * ```typescript
-   * class MyOp extends Op {
-   *   async run(io?: IOContext) {
-   *     this.log(io, 'Starting operation...');
-   *     // ... do work ...
-   *     this.log(io, 'Operation complete');
-   *     return this.succeed(result);
-   *   }
-   * }
-   * ```
+   Convenience method for logging from ops. Uses the logger from IOContext.
+
+   @deprecated The `io` parameter will be removed in a future version. Use `this.log(message)` instead.
+
+   @example
+   ```typescript
+   class MyOp extends Op {
+     async run() {
+       this.log('Starting operation...');
+       return this.succeed(result);
+     }
+   }
+   ```
    */
-  protected log(io: IOContext | undefined, message: string): void
+  protected log(io: IOContext | undefined, message: string): void;
+  protected log(message: string): void;
+  protected log(ioOrMessage: IOContext | undefined | string, message?: string): void
   {
-    this.getIO(io).logger.log(message);
+    if (typeof ioOrMessage === 'string')
+    {
+      this.getIO().logger.log(ioOrMessage);
+    }
+    else
+    {
+      this.getIO(ioOrMessage).logger.log(message!);
+    }
   }
 
   /**
-   * Convenience method for warning from ops
+   Convenience method for warning from ops.
+
+   @deprecated The `io` parameter will be removed in a future version. Use `this.warn(message)` instead.
    */
-  protected warn(io: IOContext | undefined, message: string): void
+  protected warn(io: IOContext | undefined, message: string): void;
+  protected warn(message: string): void;
+  protected warn(ioOrMessage: IOContext | undefined | string, message?: string): void
   {
-    this.getIO(io).logger.warn(message);
+    if (typeof ioOrMessage === 'string')
+    {
+      this.getIO().logger.warn(ioOrMessage);
+    }
+    else
+    {
+      this.getIO(ioOrMessage).logger.warn(message!);
+    }
   }
 
   /**
-   * Convenience method for errors from ops
+   Convenience method for errors from ops.
+
+   @deprecated The `io` parameter will be removed in a future version. Use `this.error(message)` instead.
    */
-  protected error(io: IOContext | undefined, message: string): void
+  protected error(io: IOContext | undefined, message: string): void;
+  protected error(message: string): void;
+  protected error(ioOrMessage: IOContext | undefined | string, message?: string): void
   {
-    this.getIO(io).logger.error(message);
+    if (typeof ioOrMessage === 'string')
+    {
+      this.getIO().logger.error(ioOrMessage);
+    }
+    else
+    {
+      this.getIO(ioOrMessage).logger.error(message!);
+    }
   }
 
   /**
