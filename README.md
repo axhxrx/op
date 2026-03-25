@@ -30,18 +30,6 @@ _Description forthcoming._
 
 The record/replay mechnanism provided by this library is very useful, but it also records all inputs to a non-encrypted file on disk. You don't want to do this if your CLI program (or whatever you're building) prompts the user for a password, or token, etc.
 
-To disable capture temporarily, use 
-
-
-
-```typescript
-import { init } from "@axhxrx/op";
-
-const args = process.argv.slice(2);
-const { args, opsMain } = init(args); // or
-const outcome = await opsMain(new MyRootOp(args));
-```
-
 Record a session: `./my-app --record session.json`
 Replay it: `./my-app --replay session.json`
 
