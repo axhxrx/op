@@ -339,7 +339,7 @@ export class TeeStream extends Writable
         (error: unknown) => callback(error as Error),
       );
     }
-    catch (error)
+    catch (error: unknown)
     {
       callback(error as Error);
     }
@@ -354,7 +354,7 @@ export class TeeStream extends Writable
     {
       this.releaseLogSink(callback);
     }
-    catch (error)
+    catch (error: unknown)
     {
       callback(error as Error);
     }
@@ -372,7 +372,7 @@ export class TeeStream extends Writable
         callback((releaseError as Error | null | undefined) ?? error);
       });
     }
-    catch (error)
+    catch (error: unknown)
     {
       callback(error as Error);
     }

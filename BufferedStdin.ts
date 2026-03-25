@@ -137,11 +137,6 @@ export abstract class BufferedStdin extends EventEmitter
     return this.stdinSource.isTTY ?? false;
   }
 
-  get isRawModeSupported(): boolean
-  {
-    return this.stdinSource.isTTY ?? false;
-  }
-
   get isRaw(): boolean
   {
     return this.stdinSource.isRaw ?? false;

@@ -1,4 +1,4 @@
-#!/usr/bin/env deno run --allow-read --allow-write --allow-env
+#!/usr/bin/env deno run
 
 import { createInterface } from 'node:readline';
 import { Op } from './Op.ts';

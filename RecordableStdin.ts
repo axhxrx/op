@@ -52,7 +52,7 @@ export class RecordableStdin extends BufferedStdin
 
     const str = typeof data === 'string'
       ? data
-      : data.toString();
+      : data.toString(this.encoding ?? 'utf8');
 
     if (!InputRecording.disabled)
     {

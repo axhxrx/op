@@ -10,6 +10,8 @@ export { createDefaultLogger, Logger } from './Logger.ts';
 
 // Type guards
 export { isOp } from './isOp.ts';
+export { isHandler } from './HandlerWithMeta.ts';
+export type { HandlerWithMeta } from './HandlerWithMeta.ts';
 
 // Args
 export { parseOpRunnerArgs } from './args.ts';

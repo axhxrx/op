@@ -108,7 +108,7 @@ export class FetchUserOp extends Op<
 
       return this.succeed(user);
     }
-    catch (error)
+    catch (error: unknown)
     {
       return this.failWithUnknownError(String(error));
     }
