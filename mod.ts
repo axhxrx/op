@@ -16,6 +16,7 @@ export { parseOpRunnerArgs } from './args.ts';
 export type { OpRunnerArgs } from './args.ts';
 
 // Record/replay
+export { InputRecording } from './InputRecording.ts';
 export { RecordableStdin } from './RecordableStdin.ts';
 export type { InputEvent, Session } from './RecordableStdin.ts';
 export { ReplayableStdin } from './ReplayableStdin.ts';

@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
+import { InputRecording } from './InputRecording.ts';
 import { RecordableStdin, type Session } from './RecordableStdin.ts';
 import { ReplayableStdin } from './ReplayableStdin.ts';
 
@@ -101,6 +102,46 @@ test('RecordableStdin.saveSession returns the persisted session payload', async 
   {
     stdin.destroy();
     await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('RecordableStdin skips persisted chunks while InputRecording is disabled', () =>
+{
+  const source = new PassThrough();
+  const stdin = new RecordableStdin(source);
+  const dataChunks: string[] = [];
+
+  stdin.on('data', (chunk: Buffer | string) =>
+  {
+    dataChunks.push(chunk.toString());
+  });
+
+  try
+  {
+    source.write('public-1');
+
+    InputRecording.disabled = true;
+    source.write('secret');
+
+    InputRecording.disabled = false;
+    source.write('public-2');
+
+    expect(dataChunks).toEqual(['public-1', 'secret', 'public-2']);
+    expect(stdin.getRecording()).toEqual([
+      {
+        timestamp: expect.any(Number),
+        data: 'public-1',
+      },
+      {
+        timestamp: expect.any(Number),
+        data: 'public-2',
+      },
+    ]);
+  }
+  finally
+  {
+    InputRecording.disabled = false;
+    stdin.destroy();
   }
 });
 

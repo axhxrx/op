@@ -63,6 +63,21 @@ const outcome = await opsMain(new MyRootOp(args));
 Record a session: `./my-app --record session.json`
 Replay it: `./my-app --replay session.json`
 
+`--record` stores plaintext keystrokes in the session file. To exclude sensitive input:
+
+```typescript
+import { InputRecording } from "@axhxrx/op";
+
+InputRecording.disabled = true;
+try {
+  await promptForPassword();
+} finally {
+  InputRecording.disabled = false;
+}
+```
+
+Disabled input still reaches your app normally, but it is omitted from the recorded session.
+
 ## Runtime
 
-Works with Deno and No runtime dependencies.
+The aim is to be runtime-agnostic to the degree feasible; Bun and Deno for sure, and hopefully recent versions of Node.js, too.

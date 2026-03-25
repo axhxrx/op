@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 import { BufferedStdin, type InputChunk, type StdinSource } from './BufferedStdin.ts';
+import { InputRecording } from './InputRecording.ts';
 
 export type { StdinSource } from './BufferedStdin.ts';
 
@@ -53,10 +54,13 @@ export class RecordableStdin extends BufferedStdin
       ? data
       : data.toString();
 
-    this.recording.push({
-      timestamp: Date.now() - this.startTime,
-      data: str,
-    });
+    if (!InputRecording.disabled)
+    {
+      this.recording.push({
+        timestamp: Date.now() - this.startTime,
+        data: str,
+      });
+    }
 
     this.enqueueChunk(data);
   };
