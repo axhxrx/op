@@ -145,6 +145,87 @@ test('RecordableStdin skips persisted chunks while InputRecording is disabled', 
   }
 });
 
+test('ReplayableStdin.setRawMode during replay is buffered and applied on switch to interactive', async () =>
+{
+  const tempDir = await mkdtemp(join(tmpdir(), 'replayable-stdin-rawmode-'));
+  const sessionPath = join(tempDir, 'session.json');
+  let rawModeValue: boolean | undefined;
+  const source = Object.assign(new PassThrough(), {
+    isTTY: true,
+    setRawMode(mode: boolean)
+    {
+      rawModeValue = mode;
+    },
+  });
+
+  const session: Session = {
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    events: [{ timestamp: 0, data: 'x' }],
+  };
+
+  try
+  {
+    await writeFile(sessionPath, JSON.stringify(session), 'utf-8');
+    const stdin = await ReplayableStdin.create(sessionPath, source);
+
+    // During replay, setRawMode should be buffered, not applied
+    stdin.setRawMode(true);
+    expect(rawModeValue).toBeUndefined();
+
+    stdin.startReplay(0);
+    await waitFor(() => !stdin.isReplayActive());
+
+    // After replay, the buffered raw mode should be applied
+    expect(rawModeValue).toBe(true);
+
+    stdin.destroy();
+  }
+  finally
+  {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('ReplayableStdin does not force raw mode if setRawMode was never called during replay', async () =>
+{
+  const tempDir = await mkdtemp(join(tmpdir(), 'replayable-stdin-noraw-'));
+  const sessionPath = join(tempDir, 'session.json');
+  let rawModeSet = false;
+  const source = Object.assign(new PassThrough(), {
+    isTTY: true,
+    setRawMode(_mode: boolean)
+    {
+      rawModeSet = true;
+    },
+  });
+
+  const session: Session = {
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    events: [{ timestamp: 0, data: 'x' }],
+  };
+
+  try
+  {
+    await writeFile(sessionPath, JSON.stringify(session), 'utf-8');
+    const stdin = await ReplayableStdin.create(sessionPath, source);
+
+    // Never call setRawMode during replay
+    stdin.startReplay(0);
+    await waitFor(() => !stdin.isReplayActive());
+
+    // Raw mode should NOT have been set
+    expect(rawModeSet).toBe(false);
+
+    stdin.destroy();
+  }
+  finally
+  {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('ReplayableStdin emits replayed data to both data and readable consumers and detaches listeners', async () =>
 {
   const tempDir = await mkdtemp(join(tmpdir(), 'replayable-stdin-'));
