@@ -20,7 +20,7 @@ export type InitResult = {
   /**
    Run your root op through the ops framework. This function captures the opsArgs in a closure, so you just pass your op and it handles the rest.
    */
-  opsMain: <T extends Op>(initialOp: T) => Promise<OutcomeOf<T>>;
+  opsMain: <T extends Op<unknown, unknown>>(initialOp: T) => Promise<OutcomeOf<T>>;
 };
 
 /**
@@ -54,11 +54,11 @@ export function init(rawArgs: string[]): InitResult
 {
   const { opRunner, remaining } = parseOpRunnerArgs(rawArgs);
 
-  async function opsMain<T extends Op>(initialOp: T): Promise<OutcomeOf<T>>
+  async function opsMain<T extends Op<unknown, unknown>>(initialOp: T): Promise<OutcomeOf<T>>
   {
     const runner = await OpRunner.create(initialOp, opRunner);
     const finalResult = await runner.run();
-    return finalResult as OutcomeOf<T>;
+    return finalResult;
   }
 
   return {

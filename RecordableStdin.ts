@@ -1,8 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import type { Buffer } from 'node:buffer';
-import { EventEmitter } from 'node:events';
 import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
+import { BufferedStdin, type InputChunk, type StdinSource } from './BufferedStdin.ts';
+import { InputRecording } from './InputRecording.ts';
+
+export type { StdinSource } from './BufferedStdin.ts';
+
 /**
  Represents a single input event (keystroke)
  */
@@ -23,7 +25,7 @@ export type Session = {
 /**
  RecordableStdin - Records user input for later replay
 
- This is a transparent proxy around process.stdin that:
+ This is a transparent proxy around stdin that:
  1. Forwards all input to the app (so it works normally)
  2. Records every keystroke with timestamps
  3. Can save the recording to a JSON file
@@ -35,50 +37,79 @@ export type Session = {
  await stdin.saveSession('session.json');
  ```
  */
-export class RecordableStdin extends EventEmitter
+export class RecordableStdin extends BufferedStdin
 {
   private recording: InputEvent[] = [];
   private startTime: number;
   private sessionTimestamp: string;
 
-  constructor()
+  private readonly handleData = (data: InputChunk): void =>
   {
-    super();
-
-    this.startTime = Date.now();
-    this.sessionTimestamp = new Date().toISOString();
-
-    // DON'T set raw mode here - let Ink do it via our setRawMode method
-
-    // Resume stdin so we get input
-    process.stdin.resume();
-
-    // Listen to stdin and record + forward
-    process.stdin.on('data', (data: Buffer) =>
+    if (this.destroyed)
     {
-      const str = data.toString();
+      return;
+    }
 
-      // Record the input with relative timestamp
+    const str = typeof data === 'string'
+      ? data
+      : data.toString();
+
+    if (!InputRecording.disabled)
+    {
       this.recording.push({
         timestamp: Date.now() - this.startTime,
         data: str,
       });
+    }
 
-      // Forward to our emitter (so Ink and other consumers get it)
-      this.emit('data', data);
-    });
+    this.enqueueChunk(data);
+  };
 
-    // Forward other events
-    process.stdin.on('end', () => this.emit('end'));
-    process.stdin.on('error', (err) => this.emit('error', err));
-    process.stdin.on('readable', () => this.emit('readable'));
-    process.stdin.on('close', () => this.emit('close'));
+  private readonly handleEnd = (): void =>
+  {
+    this.emit('end');
+  };
+
+  private readonly handleError = (error: Error): void =>
+  {
+    this.emit('error', error);
+  };
+
+  private readonly handleClose = (): void =>
+  {
+    this.emitClose();
+  };
+
+  constructor(stdinSource: StdinSource = process.stdin)
+  {
+    super(stdinSource);
+    this.startTime = Date.now();
+    this.sessionTimestamp = new Date().toISOString();
+
+    this.stdinSource.resume();
+    this.attachSourceListeners();
+  }
+
+  private attachSourceListeners(): void
+  {
+    this.stdinSource.on('data', this.handleData);
+    this.stdinSource.on('end', this.handleEnd);
+    this.stdinSource.on('error', this.handleError);
+    this.stdinSource.on('close', this.handleClose);
+  }
+
+  private detachSourceListeners(): void
+  {
+    this.stdinSource.off('data', this.handleData);
+    this.stdinSource.off('end', this.handleEnd);
+    this.stdinSource.off('error', this.handleError);
+    this.stdinSource.off('close', this.handleClose);
   }
 
   /**
    Save the recorded session to a file
    */
-  async saveSession(path: string): Promise<void>
+  async saveSession(path: string): Promise<Session>
   {
     const session: Session = {
       version: '1.0',
@@ -87,8 +118,7 @@ export class RecordableStdin extends EventEmitter
     };
 
     await writeFile(path, JSON.stringify(session, null, 2), 'utf-8');
-    console.log(`\n[RecordableStdin] 💾 Session saved to: ${path}`);
-    console.log(`[RecordableStdin] 📊 Recorded ${this.recording.length} input events`);
+    return session;
   }
 
   /**
@@ -107,76 +137,29 @@ export class RecordableStdin extends EventEmitter
     return this.recording.length;
   }
 
-  // Implement stream-like interface for compatibility
+  protected override onDestroy(): void
+  {
+    this.detachSourceListeners();
+  }
+
   setRawMode(mode: boolean): this
   {
-    if (process.stdin.isTTY)
+    if (this.stdinSource.isTTY && this.stdinSource.setRawMode)
     {
-      process.stdin.setRawMode(mode);
+      this.stdinSource.setRawMode(mode);
     }
     return this;
   }
 
   pause(): this
   {
-    process.stdin.pause();
+    this.stdinSource.pause();
     return this;
   }
 
   resume(): this
   {
-    process.stdin.resume();
-    return this;
-  }
-
-  get isTTY(): boolean
-  {
-    return process.stdin.isTTY ?? false;
-  }
-
-  // Additional compatibility methods for Ink
-  get isRawModeSupported(): boolean
-  {
-    return process.stdin.isTTY ?? false;
-  }
-
-  // Readable stream interface
-  read(size?: number): Buffer | string | null
-  {
-    return process.stdin.read(size);
-  }
-
-  unshift(chunk: Buffer | string): void
-  {
-    if ('unshift' in process.stdin && typeof process.stdin.unshift === 'function')
-    {
-      process.stdin.unshift(chunk);
-    }
-  }
-
-  // Encoding
-  setEncoding(encoding: NodeJS.BufferEncoding): this
-  {
-    process.stdin.setEncoding(encoding);
-    return this;
-  }
-
-  // Event loop reference management (required by Ink)
-  ref(): this
-  {
-    if ('ref' in process.stdin && typeof process.stdin.ref === 'function')
-    {
-      process.stdin.ref();
-    }
-    return this;
-  }
-
-  unref(): this
-  {
-    if ('unref' in process.stdin && typeof process.stdin.unref === 'function')
-    {
-      process.stdin.unref();
-    }
+    this.stdinSource.resume();
     return this;
   }
 }

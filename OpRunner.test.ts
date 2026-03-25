@@ -3,7 +3,7 @@ import process from 'node:process';
 import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
-import type { OutcomeHandler } from './Outcome.ts';
+import type { Outcome, OutcomeHandler } from './Outcome.ts';
 
 /**
  * Debug flag for verbose logging
@@ -11,14 +11,16 @@ import type { OutcomeHandler } from './Outcome.ts';
  */
 const DEBUG = process.env.DEBUG_OPRUNNER === 'true';
 
+type TestOutcome = Outcome<unknown, string>;
+
 /**
  * Type definitions for ScriptedOp actions
  */
 type OpAction =
   | { type: 'succeed'; value: unknown }
   | { type: 'fail'; failure: string }
-  | { type: 'handleOutcome'; child: Op; handler?: OutcomeHandler<Op> }
-  | { type: 'replaceWith'; nextOp: Op };
+  | { type: 'handleOutcome'; child: ScriptedOp; handler?: OutcomeHandler<ScriptedOp, TestOutcome> }
+  | { type: 'replaceWith'; nextOp: ScriptedOp };
 
 /**
  * ScriptedOp - Flexible test op that follows a predefined script
@@ -29,7 +31,7 @@ type OpAction =
  * - Returning handleOutcome with child and optional handler
  * - Replacing itself with another op
  */
-class ScriptedOp extends Op
+class ScriptedOp extends Op<unknown, string>
 {
   name: string;
   private script: OpAction[];
@@ -65,7 +67,7 @@ class ScriptedOp extends Op
         return this.handleOutcome(action.child, action.handler);
 
       case 'replaceWith':
-        return this.succeed(action.nextOp);
+        return this.replaceWith(action.nextOp);
     }
   }
 }
@@ -73,7 +75,7 @@ class ScriptedOp extends Op
 /**
  * Helper to capture stack states at each execution step
  */
-async function captureExecution(runner: OpRunner<Op>): Promise<string[][]>
+async function captureExecution(runner: OpRunner<ScriptedOp>): Promise<string[][]>
 {
   const states: string[][] = [];
 
@@ -197,6 +199,29 @@ describe('Basic Execution', () =>
       [], // After Op3 completes
     ]);
   });
+
+  test('run() returns the terminal outcome after replacements', async () =>
+  {
+    const op3 = new ScriptedOp('Op3', [
+      { type: 'succeed', value: 'terminal result' },
+    ]);
+
+    const op2 = new ScriptedOp('Op2', [
+      { type: 'replaceWith', nextOp: op3 },
+    ]);
+
+    const op1 = new ScriptedOp('Op1', [
+      { type: 'replaceWith', nextOp: op2 },
+    ]);
+
+    const runner = await OpRunner.create(op1, { mode: 'test' });
+    const outcome = await runner.run();
+
+    expect(outcome).toEqual({
+      ok: true,
+      value: 'terminal result',
+    });
+  });
 });
 
 // =============================================================================
@@ -313,6 +338,29 @@ describe('HandleOutcome - Basic', () =>
     expect(receivedOutcome).toEqual({
       ok: false,
       failure: 'child error',
+    });
+  });
+
+  test('run() returns the terminal outcome after a handler swaps to a different op', async () =>
+  {
+    const nextOp = new ScriptedOp('NextOp', [
+      { type: 'succeed', value: 'terminal result' },
+    ]);
+
+    const child = new ScriptedOp('Child', [
+      { type: 'succeed', value: 'child done' },
+    ]);
+
+    const parent = new ScriptedOp('Parent', [
+      { type: 'handleOutcome', child, handler: () => nextOp },
+    ]);
+
+    const runner = await OpRunner.create(parent, { mode: 'test' });
+    const outcome = await runner.run();
+
+    expect(outcome).toEqual({
+      ok: true,
+      value: 'terminal result',
     });
   });
 

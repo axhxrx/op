@@ -4,7 +4,13 @@ import { type HandlerWithMeta, isHandler } from './HandlerWithMeta.ts';
 import { createIOContext, type IOContext } from './IOContext.ts';
 import { isOp } from './isOp.ts';
 import type { Op } from './Op.ts';
-import type { OpWithHandler, OutcomeOf } from './Outcome.ts';
+import {
+  isOpWithHandler,
+  isOutcome,
+  isReplaceOp,
+  OP_CONTROL,
+  type OutcomeOf,
+} from './Outcome.ts';
 
 /**
  Stack-based operation runner with full observability
@@ -16,7 +22,7 @@ import type { OpWithHandler, OutcomeOf } from './Outcome.ts';
  - Easy to add hooks/middleware later (before/after, metrics, tracing, etc.)
  - Testing: Easier to test ops in isolation
  */
-export class OpRunner<T extends Op>
+export class OpRunner<T extends Op<unknown, unknown>>
 {
   /**
    Enable or disable OpRunner's internal logging. Default: false
@@ -28,10 +34,9 @@ export class OpRunner<T extends Op>
    */
   static logFilePath = './op-runner-log.txt';
 
-  private stack: Array<Op | HandlerWithMeta> = []; // Single stack containing both Ops and Handlers
+  private stack: Array<Op<unknown, unknown> | HandlerWithMeta> = []; // Single stack containing both Ops and Handlers
 
-  private initialOp: T;
-  private initialOpOutcome?: OutcomeOf<T>;
+  private finalOutcome?: OutcomeOf<T>;
   private io: IOContext;
   private ioConfig: OpRunnerArgs;
   private startTime: number;
@@ -42,16 +47,15 @@ export class OpRunner<T extends Op>
     io: IOContext,
   )
   {
-    this.initialOp = initialOp;
     this.stack = [initialOp];
     this.ioConfig = ioConfig;
     this.io = io;
     this.startTime = Date.now();
   }
 
-  protected static _default?: OpRunner<Op>;
+  protected static _default?: OpRunner<Op<unknown, unknown>>;
 
-  static get default(): OpRunner<Op> | undefined
+  static get default(): OpRunner<Op<unknown, unknown>> | undefined
   {
     return this._default;
   }
@@ -64,11 +68,15 @@ export class OpRunner<T extends Op>
   /**
    * Create an OpRunner instance (async because IO setup may be async)
    */
-  static async create(initialOp: Op, ioConfig: OpRunnerArgs = { mode: 'interactive' }): Promise<OpRunner<Op>>
+  static async create<T extends Op<unknown, unknown>>(
+    initialOp: T,
+    ioConfig: OpRunnerArgs = { mode: 'interactive' },
+  ): Promise<OpRunner<T>>
   {
     const io = await createIOContext(ioConfig);
-    this._default = new OpRunner(initialOp, ioConfig, io);
-    return this._default;
+    const runner = new OpRunner(initialOp, ioConfig, io);
+    this._default = runner as OpRunner<Op<unknown, unknown>>;
+    return runner;
   }
 
   /**
@@ -90,6 +98,26 @@ export class OpRunner<T extends Op>
         console.error(`[OpRunner] Failed to write to log file: ${String(error)}`);
       }
     }
+  }
+
+  private async saveRecordedSession(filepath: string): Promise<void>
+  {
+    if (this.ioConfig.mode !== 'record')
+    {
+      this.io.logger.warn('[OpRunner] Cannot save session - not in record mode');
+      return;
+    }
+
+    const recordableStdin = this.io.recordableStdin;
+    if (!recordableStdin)
+    {
+      this.io.logger.warn('[OpRunner] Cannot save session - no recordable stdin available');
+      return;
+    }
+
+    const session = await recordableStdin.saveSession(filepath);
+    this.io.logger.log(`[RecordableStdin] 💾 Session saved to: ${filepath}`);
+    this.io.logger.log(`[RecordableStdin] 📊 Recorded ${session.events.length} input events`);
   }
 
   /**
@@ -151,14 +179,52 @@ export class OpRunner<T extends Op>
     }
 
     const opStartTime = Date.now();
-    const outcome = await op.run(this.io);
+    const result = await op.run(this.io);
+    const opDuration = Date.now() - opStartTime;
 
-    if (op === this.initialOp)
+    // STEP 1: Control-flow values are handled before terminal outcomes
+    if (isOpWithHandler(result))
     {
-      this.initialOpOutcome = outcome as OutcomeOf<T>;
+      const handlerWithMeta: HandlerWithMeta = {
+        [OP_CONTROL]: 'handler',
+        handler: result.handler,
+        parentName: op.name,
+      };
+
+      this.stack[this.stack.length - 1] = handlerWithMeta; // Replace op with handler
+      this.stack.push(result.op); // Push child
+
+      if (OpRunner.opLoggingEnabled)
+      {
+        this.logToFile(`↪ ${op.name} yielded child ${result.op.name} (${opDuration}ms)`);
+        this.logToFile(`REPLACED ${op.name} with Handler<${op.name}>`);
+        this.logToFile(`PUSHED ${result.op.name}`);
+        this.logToFile(`Stack is now: ${this.formatStack()}`);
+        this.logToFile('');
+      }
+      return true; // More work to do
     }
 
-    const opDuration = Date.now() - opStartTime;
+    if (isReplaceOp(result))
+    {
+      this.stack[this.stack.length - 1] = result.op;
+
+      if (OpRunner.opLoggingEnabled)
+      {
+        this.logToFile(`↪ ${op.name} replaced itself with ${result.op.name} (${opDuration}ms)`);
+        this.logToFile(`REPLACED ${op.name} with ${result.op.name}`);
+        this.logToFile(`Stack is now: ${this.formatStack()}`);
+        this.logToFile('');
+      }
+      return true; // More work to do
+    }
+
+    if (!isOutcome(result))
+    {
+      throw new Error(`[OpRunner] ${op.name} returned an invalid result`);
+    }
+
+    const outcome = result;
 
     // Log outcome
     if (OpRunner.opLoggingEnabled)
@@ -175,60 +241,6 @@ export class OpRunner<T extends Op>
         {
           this.logToFile(`   Debug: ${outcome.debugData}`);
         }
-      }
-    }
-
-    // STEP 1: Check if this op returned a child with handler
-    if (outcome.ok)
-    {
-      const isWrappedOp = outcome.value
-        && typeof outcome.value === 'object'
-        && 'op' in outcome.value
-        && 'handler' in outcome.value;
-
-      if (isWrappedOp)
-      {
-        // Single-stack: Replace op with handler, then push child
-        const wrapped = outcome.value as OpWithHandler<Op>;
-        const handlerWithMeta: HandlerWithMeta = {
-          handler: wrapped.handler,
-          parentName: op.name,
-        };
-
-        this.stack[this.stack.length - 1] = handlerWithMeta; // Replace op with handler
-        this.stack.push(wrapped.op); // Push child
-
-        if (OpRunner.opLoggingEnabled)
-        {
-          this.logToFile(`📌 Pushing: ${wrapped.op.name} (parent has outcome handler)`);
-          this.logToFile(`REPLACED ${op.name} with Handler<${op.name}>`);
-          this.logToFile(`PUSHED ${wrapped.op.name}`);
-          this.logToFile(`Stack is now: ${this.formatStack()}`);
-          this.logToFile('');
-        }
-        return true; // More work to do
-      }
-
-      // Check if it's a plain Op (REPLACE mode)
-      const isNextOp = outcome.value
-        && typeof outcome.value === 'object'
-        && 'run' in outcome.value
-        && 'name' in outcome.value;
-
-      if (isNextOp)
-      {
-        // REPLACE current with next op
-        const nextOp = outcome.value as Op;
-        this.stack[this.stack.length - 1] = nextOp;
-
-        if (OpRunner.opLoggingEnabled)
-        {
-          this.logToFile(`🔄 Replacing: ${op.name} → ${nextOp.name}`);
-          this.logToFile(`REPLACED ${op.name} with ${nextOp.name}`);
-          this.logToFile(`Stack is now: ${this.formatStack()}`);
-          this.logToFile('');
-        }
-        return true; // More work to do
       }
     }
 
@@ -249,6 +261,11 @@ export class OpRunner<T extends Op>
       {
         // Call handler with outcome
         const nextOp = top.handler(outcome);
+
+        if (!isOp(nextOp))
+        {
+          throw new Error(`[OpRunner] Handler for ${top.parentName} returned an invalid op`);
+        }
 
         // Replace handler with the op it returned
         this.stack[this.stack.length - 1] = nextOp;
@@ -274,6 +291,11 @@ export class OpRunner<T extends Op>
       this.logToFile('');
     }
 
+    if (this.stack.length === 0)
+    {
+      this.finalOutcome = outcome as OutcomeOf<T>;
+    }
+
     return this.stack.length > 0; // Continue if stack not empty
   }
 
@@ -282,11 +304,11 @@ export class OpRunner<T extends Op>
 
    Stack execution rules:
    1. Run the top op on the stack
-   2. STEP 1: If op returns OpWithHandler (child with handler):
+   2. STEP 1: If op returns a child control value:
       - REPLACE parent op with HandlerWithMeta on stack
       - PUSH child op onto stack
       - Stack becomes: [..., Handler<ParentName>, Child]
-   3. STEP 1: If op returns plain Op:
+   3. STEP 1: If op returns a replace control value:
       - REPLACE current op with the returned op
    4. STEP 2: When op completes (success or failure):
       - POP the completed op from stack
@@ -296,66 +318,78 @@ export class OpRunner<T extends Op>
       - Otherwise, op is done (no handler waiting)
    5. Repeat until stack is empty
 
-   Note: Handlers must exhaustively handle all outcomes and always return an Op.
-   The default handler returns `this` to re-run the parent op.
+   Note: Handlers must exhaustively handle all child outcomes and always return an op
+   with the same terminal outcome type as the suspended parent.
    */
   async run(): Promise<OutcomeOf<T>>
   {
-    // Initialize log file
-    if (OpRunner.opLoggingEnabled)
+    try
     {
-      try
+      // Initialize log file
+      if (OpRunner.opLoggingEnabled)
       {
-        writeFileSync(OpRunner.logFilePath, ''); // Clear log file
+        try
+        {
+          writeFileSync(OpRunner.logFilePath, ''); // Clear log file
+        }
+        catch (error)
+        {
+          console.error(`[OpRunner] Failed to initialize log file: ${String(error)}`);
+        }
       }
-      catch (error)
+
+      if (OpRunner.opLoggingEnabled)
       {
-        console.error(`[OpRunner] Failed to initialize log file: ${String(error)}`);
+        this.logToFile('🚀 Starting execution');
+        this.logToFile(`Mode: ${this.io.mode}`);
+        const firstOp = this.stack[0];
+        if (firstOp && isOp(firstOp))
+        {
+          this.logToFile(`INITIAL PUSH ${firstOp.name}. Stack is now: ${this.formatStack()}`);
+        }
+        this.logToFile('');
       }
-    }
 
-    if (OpRunner.opLoggingEnabled)
-    {
-      this.logToFile('🚀 Starting execution');
-      this.logToFile(`Mode: ${this.io.mode}`);
-      const firstOp = this.stack[0];
-      if (firstOp && isOp(firstOp))
+      // Start replay if in replay mode
+      if (this.ioConfig.mode === 'replay' && this.io.replayableStdin)
       {
-        this.logToFile(`INITIAL PUSH ${firstOp.name}. Stack is now: ${this.formatStack()}`);
+        this.io.replayableStdin.startReplay(500); // 500ms delay
       }
-      this.logToFile('');
-    }
 
-    // Start replay if in replay mode
-    // Use a longer delay to ensure Ink has time to mount and attach listeners
-    if (this.ioConfig.mode === 'replay' && this.io.replayableStdin)
+      // Execute steps until stack is empty
+      while (await this.runStep())
+      {
+        // runStep() handles all the logic
+      }
+
+      const totalDuration = Date.now() - this.startTime;
+      if (OpRunner.opLoggingEnabled)
+      {
+        this.logToFile('🏁 Stack empty, execution complete!');
+        this.logToFile(`⏱️  Total time: ${totalDuration}ms`);
+        this.logToFile('');
+      }
+
+      // FIXME: Make the session recording flush every turn so the program doesn't have to succeed to write a log
+
+      // Save recorded session if in record mode
+      if (this.ioConfig.mode === 'record' && this.io.recordableStdin && this.ioConfig.sessionFile)
+      {
+        await this.saveRecordedSession(this.ioConfig.sessionFile);
+      }
+
+      if (this.finalOutcome === undefined)
+      {
+        throw new Error('[OpRunner] Execution completed without a terminal outcome');
+      }
+
+      return this.finalOutcome;
+    }
+    finally
     {
-      this.io.replayableStdin.startReplay(500); // 500ms delay
+      this.io.recordableStdin?.destroy();
+      this.io.replayableStdin?.destroy();
     }
-
-    // Execute steps until stack is empty
-    while (await this.runStep())
-    {
-      // runStep() handles all the logic
-    }
-
-    const totalDuration = Date.now() - this.startTime;
-    if (OpRunner.opLoggingEnabled)
-    {
-      this.logToFile('🏁 Stack empty, execution complete!');
-      this.logToFile(`⏱️  Total time: ${totalDuration}ms`);
-      this.logToFile('');
-    }
-
-    // FIXME: Make the session recording flush every turn so the program doesn't have to succeed to write a log
-
-    // Save recorded session if in record mode
-    if (this.ioConfig.mode === 'record' && this.io.recordableStdin && this.ioConfig.sessionFile)
-    {
-      await this.io.recordableStdin.saveSession(this.ioConfig.sessionFile);
-    }
-
-    return this.initialOpOutcome as OutcomeOf<T>;
   }
 
   /**
@@ -405,7 +439,7 @@ export class OpRunner<T extends Op>
   /**
    Get raw stack (defensive copy for advanced testing)
    */
-  getStack(): ReadonlyArray<Op | HandlerWithMeta>
+  getStack(): ReadonlyArray<Op<unknown, unknown> | HandlerWithMeta>
   {
     return [...this.stack];
   }
@@ -425,19 +459,6 @@ export class OpRunner<T extends Op>
    */
   async saveSession(filepath: string): Promise<void>
   {
-    if (this.ioConfig.mode !== 'record')
-    {
-      console.warn('[OpRunner] Cannot save session - not in record mode');
-      return;
-    }
-
-    const recordableStdin = this.io.recordableStdin;
-    if (!recordableStdin)
-    {
-      console.warn('[OpRunner] Cannot save session - no recordable stdin available');
-      return;
-    }
-
-    await recordableStdin.saveSession(filepath);
+    await this.saveRecordedSession(filepath);
   }
 }

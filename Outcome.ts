@@ -38,22 +38,50 @@ export type Outcome<SuccessT, FailureT> =
   | Failure<FailureT>;
 
 /**
- Extract the Outcome type from an Op instance
+ A terminal outcome with unknown payload types.
+ */
+export type AnyOutcome = Outcome<unknown, unknown>;
+
+/**
+ Convert an Outcome type back into an Op type that produces it.
+ */
+export type OpWithOutcome<T extends AnyOutcome> = Op<
+  UnwrapSuccess<Extract<T, Success<unknown>>>,
+  UnwrapFailure<Extract<T, Failure<unknown>>>
+>;
+
+/**
+ Brand used for non-terminal control-flow values returned by ops.
+ */
+export const OP_CONTROL = Symbol('axhxrx.op.control');
+
+/**
+ Extract the terminal Outcome type from an Op instance
 
  @example
  type MyOutcome = OutcomeOf<typeof myOp>
  */
-export type OutcomeOf<T extends Op> = Awaited<ReturnType<T['run']>>;
+export type OutcomeOf<T extends Op<unknown, unknown>> = T extends Op<
+  infer SuccessT,
+  infer FailureT
+> ? Outcome<SuccessT, FailureT>
+  : never;
 
 /**
  Extract the success branch of an Op's outcome.
  */
-export type SuccessOutcomeOf<T extends Op> = Extract<OutcomeOf<T>, Success<unknown>>;
+export type SuccessOutcomeOf<T extends Op<unknown, unknown>> = Extract<
+  OutcomeOf<T>,
+  Success<unknown>
+>;
 
 /**
  Extract the failure branch of an Op's outcome.
  */
-export type FailureOutcomeOf<T extends Op> = Extract<OutcomeOf<T>, Failure<unknown>>;
+export type FailureOutcomeOf<T extends Op<unknown, unknown>> = Extract<
+  OutcomeOf<T>,
+  Failure<unknown>
+>;
 
 /**
  Handler function that receives a child Op's outcome and decides what to do next
@@ -77,7 +105,19 @@ export type FailureOutcomeOf<T extends Op> = Extract<OutcomeOf<T>, Failure<unkno
  }
  ```
  */
-export type OutcomeHandler<OpT extends Op> = (outcome: OutcomeOf<OpT>) => Op;
+export type OutcomeHandler<
+  OpT extends Op<unknown, unknown>,
+  Out extends AnyOutcome = AnyOutcome,
+> = (outcome: OutcomeOf<OpT>) => OpWithOutcome<Out>;
+
+/**
+ Explicit control-flow signal for replacing the current op.
+ */
+export interface ReplaceOp<Out extends AnyOutcome>
+{
+  [OP_CONTROL]: 'replace';
+  op: OpWithOutcome<Out>;
+}
 
 /**
  Wrapper that pairs an Op with an outcome handler
@@ -90,8 +130,77 @@ export type OutcomeHandler<OpT extends Op> = (outcome: OutcomeOf<OpT>) => Op;
 
  This enables flexible control flow without circular dependencies.
  */
-export interface OpWithHandler<OpT extends Op>
+export interface OpWithHandler<
+  OpT extends Op<unknown, unknown>,
+  Out extends AnyOutcome = AnyOutcome,
+>
 {
+  [OP_CONTROL]: 'child';
   op: OpT;
-  handler: OutcomeHandler<OpT>;
+  handler: OutcomeHandler<OpT, Out>;
+}
+
+/**
+ Any non-terminal control-flow value that can be returned by an Op.
+ */
+export type ControlValue<Out extends AnyOutcome> =
+  | ReplaceOp<Out>
+  | OpWithHandler<Op<unknown, unknown>, Out>;
+
+/**
+ Full return type of a single Op step: either a terminal outcome, or control-flow for OpRunner.
+ */
+export type RunResult<SuccessT, FailureT> =
+  | Outcome<SuccessT, FailureT>
+  | ControlValue<Outcome<SuccessT, FailureT>>;
+
+export function isSuccess(value: unknown): value is Success<unknown>
+{
+  return (
+    typeof value === 'object'
+    && value !== null
+    && 'ok' in value
+    && (value as Record<string, unknown>).ok === true
+    && 'value' in value
+  );
+}
+
+export function isFailure(value: unknown): value is Failure<unknown>
+{
+  return (
+    typeof value === 'object'
+    && value !== null
+    && 'ok' in value
+    && (value as Record<string, unknown>).ok === false
+    && 'failure' in value
+  );
+}
+
+export function isOutcome(value: unknown): value is AnyOutcome
+{
+  return isSuccess(value) || isFailure(value);
+}
+
+export function isReplaceOp(value: unknown): value is ReplaceOp<AnyOutcome>
+{
+  return (
+    typeof value === 'object'
+    && value !== null
+    && OP_CONTROL in value
+    && (value as Record<PropertyKey, unknown>)[OP_CONTROL] === 'replace'
+    && 'op' in value
+  );
+}
+
+export function isOpWithHandler(value: unknown): value is OpWithHandler<Op<unknown, unknown>, AnyOutcome>
+{
+  return (
+    typeof value === 'object'
+    && value !== null
+    && OP_CONTROL in value
+    && (value as Record<PropertyKey, unknown>)[OP_CONTROL] === 'child'
+    && 'op' in value
+    && 'handler' in value
+    && typeof (value as Record<string, unknown>).handler === 'function'
+  );
 }
