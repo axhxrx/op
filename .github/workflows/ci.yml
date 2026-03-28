@@ -13,6 +13,10 @@ jobs:
         with:
           deno-version: v2.x
 
+      - run: deno lint
+
+      - run: deno check
+
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -26,10 +30,6 @@ jobs:
 
       - name: Test (Bun)
         run: bun test
-
-      # deno check is done locally but can't currently be done in CI because this repo is a git submodule of the main @axhxrx/megarepo and deno currently doesn't support ejected monorepo sublibraries, so it can't work here (T_T)
-      - name: Lint (Deno)
-        run: deno lint
 
       - name: JSR check
         run: npx jsr publish --allow-dirty --dry-run
