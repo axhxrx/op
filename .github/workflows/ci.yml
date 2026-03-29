@@ -13,13 +13,15 @@ jobs:
         with:
           deno-version: v2.x
 
+      - run: deno install
+
       - run: deno lint
 
       - run: deno check
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -46,5 +48,5 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - name: 'Publish package (if new version exists)'
+      - name: "Publish package (if new version exists)"
         run: npx jsr publish --allow-dirty
