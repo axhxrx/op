@@ -32,6 +32,10 @@ export function parseOpRunnerArgs(args: string[]): {
   for (let i = 0; i < args.length; i++)
   {
     const arg = args[i];
+    if (arg === undefined)
+    {
+      continue;
+    }
 
     switch (arg)
     {
