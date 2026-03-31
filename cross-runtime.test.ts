@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { dirname, join } from 'node:path';
+import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { ExecOp } from './ExecOp.ts';
 
@@ -78,7 +79,7 @@ describe('PrintOp cross-runtime', () =>
     test(runtime, async () =>
     {
       const actual = await runScript(runtime, 'PrintOp.ts');
-      expect(actual).toBe(EXPECTED_PRINT);
+      assert.strictEqual(actual, EXPECTED_PRINT);
     });
   }
 });
@@ -98,7 +99,7 @@ describe('PromptForValueOp cross-runtime', () =>
     test(runtime, async () =>
     {
       const actual = await runScript(runtime, 'PromptForValueOp.ts', 'hello world\n');
-      expect(actual).toBe(EXPECTED_PROMPT);
+      assert.strictEqual(actual, EXPECTED_PROMPT);
     });
   }
 });
@@ -118,7 +119,7 @@ describe('PromptForPasswordOp cross-runtime', () =>
     test(runtime, async () =>
     {
       const actual = await runScript(runtime, 'PromptForPasswordOp.ts', '  hunter2hunt  \n');
-      expect(actual).toBe(EXPECTED_PASSWORD);
+      assert.strictEqual(actual, EXPECTED_PASSWORD);
     });
   }
 });

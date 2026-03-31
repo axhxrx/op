@@ -1,5 +1,6 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { test } from 'node:test';
 import { FetchUserOp, PrintOp } from './Op.examples.ts';
 import { Op } from './Op.ts';
 import type { OutcomeOf } from './Outcome.ts';
@@ -16,7 +17,7 @@ test('PrintOp - success case', async () =>
   {
     // TypeScript knows outcome.value is string
     const value: string = outcome.value;
-    expect(value).toBe('Hello, world!');
+    assert.strictEqual(value, 'Hello, world!');
   }
   else
   {
@@ -39,7 +40,7 @@ test('PrintOp - ProhibitedWord failure', async () =>
     switch (failure)
     {
       case 'ProhibitedWord':
-        expect(failure).toBe('ProhibitedWord');
+        assert.strictEqual(failure, 'ProhibitedWord');
         break;
       case 'MessageTooLong':
         throw new Error('Wrong failure type');
@@ -62,8 +63,8 @@ test('PrintOp - MessageTooLong failure', async () =>
 
   if (!outcome.ok)
   {
-    expect(outcome.failure).toBe('MessageTooLong');
-    expect(outcome.debugData).toBe(`Length: ${longMessage.length}, Max: 100`);
+    assert.strictEqual(outcome.failure, 'MessageTooLong');
+    assert.strictEqual(outcome.debugData, `Length: ${longMessage.length}, Max: 100`);
   }
   else
   {
@@ -85,7 +86,7 @@ test('FetchUserOp - MissingUserId failure', async () =>
       | 'EmailNotFound'
       | 'unknownError' = outcome.failure;
 
-    expect(outcome.failure).toBe('MissingUserId');
+    assert.strictEqual(outcome.failure, 'MissingUserId');
   }
   else
   {
@@ -100,7 +101,7 @@ test('FetchUserOp - InvalidUserId failure', async () =>
 
   if (!outcome.ok)
   {
-    expect(outcome.failure).toBe('InvalidUserId');
+    assert.strictEqual(outcome.failure, 'InvalidUserId');
   }
   else
   {
@@ -117,8 +118,8 @@ test('FetchUserOp - success case', async () =>
   {
     // TypeScript knows the exact shape
     const user: { id: string; name: string; email: string } = outcome.value;
-    expect(user.id).toBe('user123');
-    expect(user.name).toBe('John Doe');
+    assert.strictEqual(user.id, 'user123');
+    assert.strictEqual(user.name, 'John Doe');
   }
   else
   {
@@ -148,9 +149,9 @@ test('OutcomeOf utility type works correctly', () =>
     failure: 'MessageTooLong',
   };
 
-  expect(successOutcome.ok).toBe(true);
-  expect(failureOutcome.ok).toBe(false);
-  expect(anotherFailure.ok).toBe(false);
+  assert.strictEqual(successOutcome.ok, true);
+  assert.strictEqual(failureOutcome.ok, false);
+  assert.strictEqual(anotherFailure.ok, false);
 
   const _invalidFailure: PrintOpOutcome = {
     ok: false,
@@ -233,8 +234,8 @@ test('CalculateOp - success with complex return type', async () =>
   {
     // TypeScript knows the exact shape
     const result: { sum: number; product: number } = outcome.value;
-    expect(result.sum).toBe(15);
-    expect(result.product).toBe(50);
+    assert.strictEqual(result.sum, 15);
+    assert.strictEqual(result.product, 50);
   }
   else
   {
@@ -251,7 +252,7 @@ test('CalculateOp - failure cases', async () =>
   {
     // Exhaustive type check
     const failure: 'NegativeInput' | 'InputTooLarge' | 'unknownError' = negativeOutcome.failure;
-    expect(failure).toBe('NegativeInput');
+    assert.strictEqual(failure, 'NegativeInput');
   }
   else
   {
@@ -263,7 +264,7 @@ test('CalculateOp - failure cases', async () =>
 
   if (!largeOutcome.ok)
   {
-    expect(largeOutcome.failure).toBe('InputTooLarge');
+    assert.strictEqual(largeOutcome.failure, 'InputTooLarge');
   }
   else
   {
@@ -275,7 +276,7 @@ test('Op.run() static method executes through OpRunner and returns outcome', asy
 {
   const outcome = await StaticRunRootOp.run();
 
-  expect(outcome).toEqual({
+  assert.deepStrictEqual(outcome, {
     ok: true,
     value: 'terminal result',
   });
@@ -310,14 +311,14 @@ test('console.log goes through IOContext when patched', () =>
     console.warn('hello from warn');
     console.error('hello from error');
 
-    expect(stdoutChunks.join('')).toContain('hello from log');
-    expect(stderrChunks.join('')).toContain('hello from warn');
-    expect(stderrChunks.join('')).toContain('hello from error');
+    assert.ok(stdoutChunks.join('').includes('hello from log'));
+    assert.ok(stderrChunks.join('').includes('hello from warn'));
+    assert.ok(stderrChunks.join('').includes('hello from error'));
     // log should NOT appear in stderr
-    expect(stderrChunks.join('')).not.toContain('hello from log');
+    assert.ok(!stderrChunks.join('').includes('hello from log'));
     // warn/error should NOT appear in stdout
-    expect(stdoutChunks.join('')).not.toContain('hello from warn');
-    expect(stdoutChunks.join('')).not.toContain('hello from error');
+    assert.ok(!stdoutChunks.join('').includes('hello from warn'));
+    assert.ok(!stdoutChunks.join('').includes('hello from error'));
   }
   finally
   {
@@ -339,7 +340,7 @@ test('Type narrowing works correctly', async () =>
     // After narrowing, TypeScript knows it's Success<string>
     type _SuccessType = typeof outcome; // Success<string>
     const value: string = outcome.value;
-    expect(value).toBe('test');
+    assert.strictEqual(value, 'test');
 
     // @ts-expect-error - 'failure' doesn't exist on Success type
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -386,7 +387,7 @@ test('Op.io returns SharedContext.effectiveIOContext', () =>
   try
   {
     const op = new IOAccessOp();
-    expect(op['io'].mode).toBe('test');
+    assert.strictEqual(op['io'].mode, 'test');
   }
   finally
   {
@@ -408,8 +409,8 @@ test('Op.fail includes debugData when provided', async () =>
 
   const outcome = await new FailDebugOp().run();
   if (outcome.ok) throw new Error('Expected failure');
-  expect(outcome.failure).toBe('badThing');
-  expect(outcome.debugData).toBe('extra info here');
+  assert.strictEqual(outcome.failure, 'badThing');
+  assert.strictEqual(outcome.debugData, 'extra info here');
 });
 
 test('Op.failWithUnknownError includes debugData', async () =>
@@ -426,8 +427,8 @@ test('Op.failWithUnknownError includes debugData', async () =>
 
   const outcome = await new UnknownFailOp().run();
   if (outcome.ok) throw new Error('Expected failure');
-  expect(outcome.failure).toBe('unknownError');
-  expect(outcome.debugData).toBe('something went wrong');
+  assert.strictEqual(outcome.failure, 'unknownError');
+  assert.strictEqual(outcome.debugData, 'something went wrong');
 });
 
 test('Op.cancel returns standard canceled failure', async () =>
@@ -443,14 +444,14 @@ test('Op.cancel returns standard canceled failure', async () =>
   }
 
   const outcome = await new CancelOp().run();
-  expect(outcome).toEqual({ ok: false, failure: 'canceled' });
+  assert.deepStrictEqual(outcome, { ok: false, failure: 'canceled' });
 });
 
 test('PrintOp with empty message succeeds', async () =>
 {
   const op = new PrintOp('');
   const outcome = await op.run();
-  expect(outcome).toEqual({ ok: true, value: '' });
+  assert.deepStrictEqual(outcome, { ok: true, value: '' });
 });
 
 test('PrintOp at exactly maxLength succeeds', async () =>
@@ -458,5 +459,5 @@ test('PrintOp at exactly maxLength succeeds', async () =>
   const msg = 'a'.repeat(100);
   const op = new PrintOp(msg, { maxLength: 100 });
   const outcome = await op.run();
-  expect(outcome.ok).toBe(true);
+  assert.strictEqual(outcome.ok, true);
 });
