@@ -70,6 +70,8 @@ However, that made it obvious that really fixing the the problem all the way req
 
 The net effect is more simplicity at the point of use, and the elimination of the tension between the two op execution models that didn't work well in tandem.
 
+The second major change is deciding to monkey-patch `console` after all, after explicitly deciding to avoid that originally. In the context of this lib, it makes sense, as it keeps the API much closer to what bots expect when "going with their gut" (coding based on their training data), and patching it enables the valuable record/replay features to still "just work".
+
 - 2026-03-31 💥 1.0.0 — introduce new hopefully-better execution model, to make direct op invocation and stack-based invocation stop fighting
 
 ### old 0.x.x versions
