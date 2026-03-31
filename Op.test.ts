@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import process from 'node:process';
 import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
+import { createDefaultLogger } from './Logger.ts';
 import { FetchUserOp, PrintOp } from './Op.examples.ts';
 import { Op } from './Op.ts';
 import type { OutcomeOf } from './Outcome.ts';
@@ -294,7 +296,6 @@ test('console.log goes through IOContext when patched', () =>
   mockStdout.on('data', (chunk: string) => stdoutChunks.push(chunk));
   mockStderr.on('data', (chunk: string) => stderrChunks.push(chunk));
 
-  const { createDefaultLogger } = require('./Logger.ts');
   SharedContext.overrideDefaultIOContext = {
     stdin: process.stdin,
     stdout: mockStdout,
@@ -374,7 +375,6 @@ test('Op.io returns SharedContext.effectiveIOContext', () =>
 
   const mockStdout = new PassThrough();
   const mockStderr = new PassThrough();
-  const { createDefaultLogger } = require('./Logger.ts');
 
   SharedContext.overrideDefaultIOContext = {
     stdin: process.stdin,
