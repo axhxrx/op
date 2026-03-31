@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import process from 'node:process';
+import { describe, test } from 'node:test';
 import { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
 import type { Outcome } from './Outcome.ts';
@@ -189,7 +190,7 @@ describe('Basic Execution', () =>
     const runner = await OpRunner.create(op, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({ ok: true, value: 'done' });
+    assert.deepStrictEqual(outcome, { ok: true, value: 'done' });
   });
 
   test('Single op fails', async () =>
@@ -198,7 +199,7 @@ describe('Basic Execution', () =>
     const runner = await OpRunner.create(op, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({ ok: false, failure: 'error occurred' });
+    assert.deepStrictEqual(outcome, { ok: false, failure: 'error occurred', debugData: undefined });
   });
 
   test('run() returns the terminal outcome', async () =>
@@ -207,7 +208,7 @@ describe('Basic Execution', () =>
     const runner = await OpRunner.create(op, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({
+    assert.deepStrictEqual(outcome, {
       ok: true,
       value: 'terminal result',
     });
@@ -222,7 +223,7 @@ describe('Basic Execution', () =>
     await runner.run();
 
     // Now stack is empty, runStep should return false
-    expect(await runner.runStep()).toBe(false);
+    assert.strictEqual(await runner.runStep(), false);
   });
 });
 
@@ -240,7 +241,7 @@ describe('Child Op Execution', () =>
     const runner = await OpRunner.create(parent, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({
+    assert.deepStrictEqual(outcome, {
       ok: true,
       value: 'parent-got-child-result',
     });
@@ -254,9 +255,10 @@ describe('Child Op Execution', () =>
     const runner = await OpRunner.create(parent, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({
+    assert.deepStrictEqual(outcome, {
       ok: false,
       failure: 'child-failed: child error',
+      debugData: undefined,
     });
   });
 
@@ -272,7 +274,7 @@ describe('Child Op Execution', () =>
     const runner = await OpRunner.create(parent, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({
+    assert.deepStrictEqual(outcome, {
       ok: true,
       value: ['one', 'two', 'three'],
     });
@@ -290,9 +292,10 @@ describe('Child Op Execution', () =>
     const runner = await OpRunner.create(parent, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({
+    assert.deepStrictEqual(outcome, {
       ok: false,
       failure: 'child-failed: boom',
+      debugData: undefined,
     });
   });
 
@@ -302,7 +305,7 @@ describe('Child Op Execution', () =>
     const runner = await OpRunner.create(op, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({ ok: true, value: 5 });
+    assert.deepStrictEqual(outcome, { ok: true, value: 5 });
   });
 
   test('Routing op branches on child outcome', async () =>
@@ -310,17 +313,17 @@ describe('Child Op Execution', () =>
     const opA = new RoutingOp('A');
     const runnerA = await OpRunner.create(opA, { mode: 'test' });
     const outcomeA = await runnerA.run();
-    expect(outcomeA).toEqual({ ok: true, value: 'routed-to-A: result-A' });
+    assert.deepStrictEqual(outcomeA, { ok: true, value: 'routed-to-A: result-A' });
 
     const opB = new RoutingOp('B');
     const runnerB = await OpRunner.create(opB, { mode: 'test' });
     const outcomeB = await runnerB.run();
-    expect(outcomeB).toEqual({ ok: true, value: 'routed-to-B: result-B' });
+    assert.deepStrictEqual(outcomeB, { ok: true, value: 'routed-to-B: result-B' });
 
     const opC = new RoutingOp('C');
     const runnerC = await OpRunner.create(opC, { mode: 'test' });
     const outcomeC = await runnerC.run();
-    expect(outcomeC).toEqual({ ok: true, value: 'no-route: C' });
+    assert.deepStrictEqual(outcomeC, { ok: true, value: 'no-route: C' });
   });
 });
 
@@ -340,7 +343,7 @@ describe('Deep Nesting', () =>
     const runner = await OpRunner.create(parent, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome).toEqual({
+    assert.deepStrictEqual(outcome, {
       ok: true,
       value: 'parent-got-parent-got-gc-result',
     });
@@ -360,11 +363,11 @@ describe('Deep Nesting', () =>
     const runner = await OpRunner.create(current, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome.ok).toBe(true);
+    assert.strictEqual(outcome.ok, true);
     // The value should have "parent-got-" prepended 10 times
     if (outcome.ok)
     {
-      expect(outcome.value).toBe('parent-got-'.repeat(10) + 'leaf-value');
+      assert.strictEqual(outcome.value, 'parent-got-'.repeat(10) + 'leaf-value');
     }
   });
 });
@@ -381,8 +384,8 @@ describe('Stack State', () =>
     const runner = await OpRunner.create(op, { mode: 'test' });
     await runner.run();
 
-    expect(runner.getStackDepth()).toBe(0);
-    expect(runner.getStackSnapshot()).toEqual([]);
+    assert.strictEqual(runner.getStackDepth(), 0);
+    assert.deepStrictEqual(runner.getStackSnapshot(), []);
   });
 
   test('Stack has one item before execution', async () =>
@@ -390,8 +393,8 @@ describe('Stack State', () =>
     const op = new SimpleOp('Op', 'done');
     const runner = await OpRunner.create(op, { mode: 'test' });
 
-    expect(runner.getStackDepth()).toBe(1);
-    expect(runner.getStackSnapshot()).toEqual(['Op']);
+    assert.strictEqual(runner.getStackDepth(), 1);
+    assert.deepStrictEqual(runner.getStackSnapshot(), ['Op']);
   });
 
   test('OpRunner.defaultIOContext is set after create()', async () =>
@@ -400,8 +403,8 @@ describe('Stack State', () =>
     await OpRunner.create(op, { mode: 'test' });
 
     const io = OpRunner.defaultIOContext;
-    expect(io).toBeDefined();
-    expect(io!.mode).toBe('test');
+    assert.notStrictEqual(io, undefined);
+    assert.strictEqual(io!.mode, 'test');
   });
 });
 
@@ -418,7 +421,7 @@ describe('Edge Cases', () =>
     badOp.execute = () => Promise.resolve('not a valid result' as never);
 
     const runner = await OpRunner.create(badOp, { mode: 'test' });
-    await expect(runner.run()).rejects.toThrow('returned an invalid result');
+    await assert.rejects(runner.run(), /returned an invalid result/);
   });
 
   test('Op that runs many children does not blow stack', async () =>
@@ -433,10 +436,10 @@ describe('Edge Cases', () =>
     const runner = await OpRunner.create(parent, { mode: 'test' });
     const outcome = await runner.run();
 
-    expect(outcome.ok).toBe(true);
+    assert.strictEqual(outcome.ok, true);
     if (outcome.ok)
     {
-      expect(outcome.value).toHaveLength(100);
+      assert.strictEqual(outcome.value.length, 100);
     }
   });
 });

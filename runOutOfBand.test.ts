@@ -1,5 +1,6 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { test } from 'node:test';
 import { createIOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
@@ -63,11 +64,11 @@ test('runOutOfBand executes a simple op and returns its outcome', async () =>
   const runner = await OpRunner.create(new SimpleOp('root'), { mode: 'test' });
   const outcome = await runner.runOutOfBand(new SimpleOp('oob'));
 
-  expect(outcome).toEqual({ ok: true, value: 'oob' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'oob' });
 
   // The main runner's stack should be unaffected
   const mainOutcome = await runner.run();
-  expect(mainOutcome).toEqual({ ok: true, value: 'root' });
+  assert.deepStrictEqual(mainOutcome, { ok: true, value: 'root' });
   resetRunner();
 });
 
@@ -82,10 +83,10 @@ test('Op.run() delegates to runOutOfBand when default runner exists', async () =
 
   // Op.run() should use the default runner's runOutOfBand
   const outcome = await SimpleOp.run('via-static');
-  expect(outcome).toEqual({ ok: true, value: 'via-static' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'via-static' });
 
   // Default runner should still be the same
-  expect(OpRunner.default).toBe(runner);
+  assert.strictEqual(OpRunner.default, runner);
 
   // Clean up
   await runner.run();
@@ -98,7 +99,7 @@ test('Op.run() is reentrant — nested Op.run() calls work', async () =>
   const runner = await OpRunner.create(new OutOfBandCallerOp(), { mode: 'test' });
   const outcome = await runner.run();
 
-  expect(outcome).toEqual({ ok: true, value: 'outer-got-from-inner' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'outer-got-from-inner' });
   resetRunner();
 });
 
@@ -108,7 +109,7 @@ test('Op.run() is deeply reentrant — double-nested Op.run() calls work', async
   const runner = await OpRunner.create(new DoubleNestedOp(), { mode: 'test' });
   const outcome = await runner.run();
 
-  expect(outcome).toEqual({ ok: true, value: 'deep-outer-got-from-inner' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'deep-outer-got-from-inner' });
   resetRunner();
 });
 
@@ -116,13 +117,13 @@ test('stale runner is cleared after run() completes', async () =>
 {
   resetRunner();
   const runner = await OpRunner.create(new SimpleOp('done'), { mode: 'test' });
-  expect(OpRunner.default).toBe(runner);
+  assert.strictEqual(OpRunner.default, runner);
 
   await runner.run();
 
   // Default should be cleared after run() completes
-  expect(OpRunner.default).toBeUndefined();
-  expect(OpRunner.defaultIOContext).toBeUndefined();
+  assert.strictEqual(OpRunner.default, undefined);
+  assert.strictEqual(OpRunner.defaultIOContext, undefined);
   resetRunner();
 });
 
@@ -133,14 +134,14 @@ test('Op.run() creates fresh runner after previous runner completed', async () =
   // First runner runs and completes
   const runner1 = await OpRunner.create(new SimpleOp('first'), { mode: 'test' });
   await runner1.run();
-  expect(OpRunner.default).toBeUndefined();
+  assert.strictEqual(OpRunner.default, undefined);
 
   // Now Op.run() should create a fresh runner, not use the stale one
   const outcome = await SimpleOp.run('fresh');
-  expect(outcome).toEqual({ ok: true, value: 'fresh' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'fresh' });
 
   // The fresh runner also completed, so default should be cleared again
-  expect(OpRunner.default).toBeUndefined();
+  assert.strictEqual(OpRunner.default, undefined);
   resetRunner();
 });
 
@@ -149,7 +150,7 @@ test('instance run() goes through OpRunner', async () =>
   resetRunner();
   const op = new SimpleOp('direct');
   const outcome = await op.run();
-  expect(outcome).toEqual({ ok: true, value: 'direct' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'direct' });
   resetRunner();
 });
 
@@ -179,7 +180,7 @@ test('runOutOfBand shares IOContext with primary runner', async () =>
   }
 
   await runner.runOutOfBand(new PrintingOp());
-  expect(stdoutChunks.join('')).toContain('oob-output');
+  assert.ok(stdoutChunks.join('').includes('oob-output'));
 
   await runner.run();
   resetRunner();

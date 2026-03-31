@@ -1,9 +1,10 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import type { Buffer } from 'node:buffer';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
+import { test } from 'node:test';
 import { TeeStream, TeeStreamLogSink } from './TeeStream.ts';
 
 function endTeeStream(stream: TeeStream): Promise<void>
@@ -70,13 +71,9 @@ test('TeeStreamLogSink.release throws on underflow and closes the sink', async (
 
   try
   {
-    await expect(sink.release()).rejects.toThrow(
-      '[TeeStream] release() called more times than retain()',
-    );
+    await assert.rejects(sink.release(), /\[TeeStream\] release\(\) called more times than retain\(\)/);
 
-    await expect(sink.append('late write')).rejects.toThrow(
-      '[TeeStream] Cannot write after log sink is closing',
-    );
+    await assert.rejects(sink.append('late write'), /\[TeeStream\] Cannot write after log sink is closing/);
   }
   finally
   {
@@ -97,8 +94,8 @@ test('TeeStream waits for terminal backpressure before completing writes', async
     await writeChunk(teeStream, 'backpressure test\n');
 
     const durationMs = Date.now() - start;
-    expect(durationMs).toBeGreaterThanOrEqual(15);
-    expect(terminalStream.chunks).toEqual(['backpressure test\n']);
+    assert.ok(durationMs >= 15);
+    assert.deepStrictEqual(terminalStream.chunks, ['backpressure test\n']);
 
     await endTeeStream(teeStream);
 
@@ -106,7 +103,7 @@ test('TeeStream waits for terminal backpressure before completing writes', async
       .split('\n')
       .filter(Boolean)
       .map(stripTimestampPrefix);
-    expect(logLines).toEqual(['backpressure test']);
+    assert.deepStrictEqual(logLines, ['backpressure test']);
   }
   finally
   {
@@ -141,7 +138,7 @@ test('Standalone TeeStreams auto-share an active sink for the same log path', as
         .filter(Boolean)
         .map(stripTimestampPrefix);
 
-      expect(logLines).toEqual([
+      assert.deepStrictEqual(logLines, [
         'first line',
         'second line',
       ]);
@@ -205,9 +202,9 @@ test('TeeStream.createPair routes terminal output separately and serializes log 
       .filter(Boolean)
       .map(stripTimestampPrefix);
 
-    expect(stdoutOutput).toBe('stdout one\nstdout two\n');
-    expect(stderrOutput).toBe('stderr one\nstderr two\n');
-    expect(logLines).toEqual([
+    assert.strictEqual(stdoutOutput, 'stdout one\nstdout two\n');
+    assert.strictEqual(stderrOutput, 'stderr one\nstderr two\n');
+    assert.deepStrictEqual(logLines, [
       'stdout one',
       'stderr one',
       'stdout two',
@@ -241,14 +238,14 @@ test('TeeStream with stripAnsi option strips ANSI from log but preserves in term
     await endTeeStream(teeStream);
 
     // Terminal should have ANSI codes
-    expect(terminalOutput).toBe(colored);
+    assert.strictEqual(terminalOutput, colored);
 
     // Log should have ANSI stripped
     const logLines = (await readFile(logFile, 'utf8'))
       .split('\n')
       .filter(Boolean)
       .map(stripTimestampPrefix);
-    expect(logLines).toEqual(['Red text']);
+    assert.deepStrictEqual(logLines, ['Red text']);
   }
   finally
   {

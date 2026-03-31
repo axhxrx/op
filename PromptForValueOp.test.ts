@@ -1,5 +1,6 @@
-import { afterEach, expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { afterEach, test } from 'node:test';
 import { InputRecording } from './InputRecording.ts';
 import { createIOContext } from './IOContext.ts';
 import { PromptForPasswordOp } from './PromptForPasswordOp.ts';
@@ -47,7 +48,7 @@ test('PromptForValueOp succeeds with trimmed user input', async () =>
   source.write('Alice\n');
   const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: true, value: 'Alice' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'Alice' });
 });
 
 test('PromptForValueOp trims whitespace from input', async () =>
@@ -61,7 +62,7 @@ test('PromptForValueOp trims whitespace from input', async () =>
   source.write('  spaced  \n');
   const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: true, value: 'spaced' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'spaced' });
 });
 
 test('PromptForValueOp writes prompt to stdout', async () =>
@@ -77,7 +78,7 @@ test('PromptForValueOp writes prompt to stdout', async () =>
   source.write('x\n');
   await runPromise;
 
-  expect(stdoutData).toContain('Enter value: ');
+  assert.ok(stdoutData.includes('Enter value: '));
 });
 
 test('PromptForValueOp returns canceled on EOF', async () =>
@@ -91,7 +92,7 @@ test('PromptForValueOp returns canceled on EOF', async () =>
   source.end();
   const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: false, failure: 'canceled' });
+  assert.deepStrictEqual(outcome, { ok: false, failure: 'canceled' });
 });
 
 test('PromptForValueOp succeeds with empty input', async () =>
@@ -105,7 +106,7 @@ test('PromptForValueOp succeeds with empty input', async () =>
   source.write('\n');
   const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: true, value: '' });
+  assert.deepStrictEqual(outcome, { ok: true, value: '' });
 });
 
 test('PromptForPasswordOp disables InputRecording during input', async () =>
@@ -136,15 +137,15 @@ test('PromptForPasswordOp disables InputRecording during input', async () =>
     source.write('secret123\n');
     const outcome = await runPromise;
 
-    expect(outcome).toEqual({ ok: true, value: 'secret123' });
+    assert.deepStrictEqual(outcome, { ok: true, value: 'secret123' });
 
     // The password should NOT appear in the recording
     const recording = recordableStdin.getRecording();
     const hasSecret = recording.some(e => e.data.includes('secret123'));
-    expect(hasSecret).toBe(false);
+    assert.strictEqual(hasSecret, false);
 
     // InputRecording should have removed only the prohibition it added
-    expect(InputRecording.disabled).toBe(false);
+    assert.strictEqual(InputRecording.disabled, false);
   }
   finally
   {
@@ -164,8 +165,8 @@ test('PromptForPasswordOp re-enables InputRecording even on EOF', async () =>
   source.end();
   const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: false, failure: 'canceled' });
-  expect(InputRecording.disabled).toBe(false);
+  assert.deepStrictEqual(outcome, { ok: false, failure: 'canceled' });
+  assert.strictEqual(InputRecording.disabled, false);
 });
 
 test('PromptForPasswordOp preserves surrounding whitespace in non-raw mode', async () =>
@@ -179,7 +180,7 @@ test('PromptForPasswordOp preserves surrounding whitespace in non-raw mode', asy
   source.write('  secret123  \n');
   const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: true, value: '  secret123  ' });
+  assert.deepStrictEqual(outcome, { ok: true, value: '  secret123  ' });
 });
 
 test('PromptForPasswordOp preserves outer InputRecording prohibitions', async () =>
@@ -196,8 +197,8 @@ test('PromptForPasswordOp preserves outer InputRecording prohibitions', async ()
     source.write('secret123\n');
     const outcome = await runPromise;
 
-    expect(outcome).toEqual({ ok: true, value: 'secret123' });
-    expect(InputRecording.disabled).toBe(true);
+    assert.deepStrictEqual(outcome, { ok: true, value: 'secret123' });
+    assert.strictEqual(InputRecording.disabled, true);
   }
   finally
   {
@@ -223,8 +224,8 @@ test('PromptForPasswordOp restores prior raw mode when stdin is wrapped', async 
     source.write('  secret123  \n');
     const outcome = await runPromise;
 
-    expect(outcome).toEqual({ ok: true, value: '  secret123  ' });
-    expect(source.isRaw).toBe(true);
+    assert.deepStrictEqual(outcome, { ok: true, value: '  secret123  ' });
+    assert.strictEqual(source.isRaw, true);
   }
   finally
   {
