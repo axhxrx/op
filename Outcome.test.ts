@@ -2,11 +2,8 @@ import { expect, test } from 'bun:test';
 import { Op } from './Op.ts';
 import {
   isFailure,
-  isOpWithHandler,
   isOutcome,
-  isReplaceOp,
   isSuccess,
-  OP_CONTROL,
 } from './Outcome.ts';
 
 test('isSuccess returns true for valid Success', () =>
@@ -64,47 +61,17 @@ test('isOutcome returns false for non-Outcome values', () =>
 class DummyOp extends Op<string, 'fail'>
 {
   name = 'DummyOp';
-  async run()
+  async execute()
   {
     await Promise.resolve();
     return this.succeed('ok');
   }
 }
 
-test('isReplaceOp returns true for valid ReplaceOp', () =>
+test('DummyOp returns valid outcome', async () =>
 {
-  const replaceOp = {
-    [OP_CONTROL]: 'replace' as const,
-    op: new DummyOp(),
-  };
-  expect(isReplaceOp(replaceOp)).toBe(true);
-});
-
-test('isReplaceOp returns false for non-ReplaceOp values', () =>
-{
-  expect(isReplaceOp(null)).toBe(false);
-  expect(isReplaceOp(undefined)).toBe(false);
-  expect(isReplaceOp({})).toBe(false);
-  expect(isReplaceOp({ [OP_CONTROL]: 'child', op: new DummyOp() })).toBe(false);
-  expect(isReplaceOp({ [OP_CONTROL]: 'replace' })).toBe(false); // missing 'op'
-});
-
-test('isOpWithHandler returns true for valid OpWithHandler', () =>
-{
-  const opWithHandler = {
-    [OP_CONTROL]: 'child' as const,
-    op: new DummyOp(),
-    handler: () => new DummyOp(),
-  };
-  expect(isOpWithHandler(opWithHandler)).toBe(true);
-});
-
-test('isOpWithHandler returns false for non-OpWithHandler values', () =>
-{
-  expect(isOpWithHandler(null)).toBe(false);
-  expect(isOpWithHandler(undefined)).toBe(false);
-  expect(isOpWithHandler({})).toBe(false);
-  expect(isOpWithHandler({ [OP_CONTROL]: 'replace', op: new DummyOp() })).toBe(false);
-  expect(isOpWithHandler({ [OP_CONTROL]: 'child', op: new DummyOp() })).toBe(false); // missing handler
-  expect(isOpWithHandler({ [OP_CONTROL]: 'child', op: new DummyOp(), handler: 'not a function' })).toBe(false);
+  const op = new DummyOp();
+  const outcome = await op.run();
+  expect(isSuccess(outcome)).toBe(true);
+  expect(outcome).toEqual({ ok: true, value: 'ok' });
 });

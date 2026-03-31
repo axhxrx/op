@@ -19,8 +19,10 @@ type PromptForValueOutcome =
  ```typescript
  class LoginOp extends Op<void, 'canceled' | 'unknownError'> {
    name = 'LoginOp';
-   async run() {
-     const username = await this.handleOutcome(new PromptForValueOp('Username: '));
+   async execute() {
+     const result = await new PromptForValueOp('Username: ').run();
+     if (!result.ok) return this.cancel();
+     const username = result.value;
      // ...
    }
  }
@@ -42,7 +44,7 @@ export class PromptForValueOp extends Op<string, PromptForValueFailure>
     return line.trim();
   }
 
-  async run(): Promise<PromptForValueOutcome>
+  async execute(): Promise<PromptForValueOutcome>
   {
     const { stdin, stdout } = this.io;
 

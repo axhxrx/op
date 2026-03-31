@@ -39,7 +39,7 @@ export class PromptForPasswordOp extends PromptForValueOp
     return line;
   }
 
-  override async run(): Promise<PromptForPasswordOutcome>
+  override async execute(): Promise<PromptForPasswordOutcome>
   {
     const resolvedIO = this.io;
     const { stdin } = resolvedIO;
@@ -68,7 +68,7 @@ export class PromptForPasswordOp extends PromptForValueOp
       // When in raw mode, we read byte-by-byte instead of using readline. This is necessary because raw mode means Ctrl-C (0x03) arrives as data rather than generating SIGINT — we need to handle it ourselves. When NOT in raw mode (piped stdin, etc.), fall back to readline via super.
       if (!stdinHasSetRawMode)
       {
-        const outcome = await super.run();
+        const outcome = await super.execute();
         resolvedIO.stdout.write('\n');
         return outcome;
       }

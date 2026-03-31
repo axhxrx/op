@@ -128,7 +128,9 @@ test('PromptForPasswordOp disables InputRecording during input', async () =>
   try
   {
     const op = new PromptForPasswordOp('Token: ');
-    const runPromise = op.run();
+    // Call execute() directly to test internal InputRecording behavior
+    // without the async gap introduced by OpRunner scaffolding in run()
+    const runPromise = op.execute();
 
     // Write the password while InputRecording should be disabled
     source.write('secret123\n');
@@ -157,7 +159,7 @@ test('PromptForPasswordOp re-enables InputRecording even on EOF', async () =>
   await createTestIO(source);
 
   const op = new PromptForPasswordOp();
-  const runPromise = op.run();
+  const runPromise = op.execute();
 
   source.end();
   const outcome = await runPromise;
@@ -172,7 +174,7 @@ test('PromptForPasswordOp preserves surrounding whitespace in non-raw mode', asy
   await createTestIO(source);
 
   const op = new PromptForPasswordOp();
-  const runPromise = op.run();
+  const runPromise = op.execute();
 
   source.write('  secret123  \n');
   const outcome = await runPromise;
@@ -189,7 +191,7 @@ test('PromptForPasswordOp preserves outer InputRecording prohibitions', async ()
   try
   {
     const op = new PromptForPasswordOp();
-    const runPromise = op.run();
+    const runPromise = op.execute();
 
     source.write('secret123\n');
     const outcome = await runPromise;
@@ -216,7 +218,7 @@ test('PromptForPasswordOp restores prior raw mode when stdin is wrapped', async 
   try
   {
     const op = new PromptForPasswordOp('Token: ');
-    const runPromise = op.run();
+    const runPromise = op.execute();
 
     source.write('  secret123  \n');
     const outcome = await runPromise;

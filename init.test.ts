@@ -5,7 +5,7 @@ import { Op } from './Op.ts';
 class SimpleOp extends Op<string, 'unknownError'>
 {
   name = 'SimpleOp';
-  async run()
+  async execute()
   {
     await Promise.resolve();
     return this.succeed('done');

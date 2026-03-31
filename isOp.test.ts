@@ -5,7 +5,7 @@ import { Op } from './Op.ts';
 class TestOp extends Op<string, never>
 {
   name = 'TestOp';
-  async run()
+  async execute()
   {
     await Promise.resolve();
     return this.succeed('ok');

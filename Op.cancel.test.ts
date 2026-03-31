@@ -15,7 +15,7 @@ class CancelableOp extends Op<string, 'canceled'>
     this.shouldCancel = shouldCancel;
   }
 
-  async run()
+  async execute()
   {
     await Promise.resolve();
 

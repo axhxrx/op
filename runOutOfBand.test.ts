@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream';
 import { createIOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
-import type { Failure, RunResult, Success } from './Outcome.ts';
+import type { Failure, Success } from './Outcome.ts';
 import { unpatchConsole } from './patchConsole.ts';
 
 class SimpleOp extends Op<string, 'unknownError'>
@@ -17,21 +17,10 @@ class SimpleOp extends Op<string, 'unknownError'>
     this.value = value;
   }
 
-  async run(): Promise<Success<string> | Failure<'unknownError'>>
+  async execute(): Promise<Success<string> | Failure<'unknownError'>>
   {
     await Promise.resolve();
     return this.succeed(this.value);
-  }
-}
-
-class ReplacingOp extends Op<string, 'unknownError'>
-{
-  name = 'ReplacingOp';
-
-  async run(): Promise<RunResult<string, 'unknownError'>>
-  {
-    await Promise.resolve();
-    return this.replaceWith(new SimpleOp('replaced'));
   }
 }
 
@@ -39,7 +28,7 @@ class OutOfBandCallerOp extends Op<string, 'unknownError'>
 {
   name = 'OutOfBandCallerOp';
 
-  async run(): Promise<Success<string> | Failure<'unknownError'>>
+  async execute(): Promise<Success<string> | Failure<'unknownError'>>
   {
     // This op calls Op.run() which should use runOutOfBand on the current runner
     const innerOutcome = await SimpleOp.run('from-inner');
@@ -52,7 +41,7 @@ class DoubleNestedOp extends Op<string, 'unknownError'>
 {
   name = 'DoubleNestedOp';
 
-  async run(): Promise<Success<string> | Failure<'unknownError'>>
+  async execute(): Promise<Success<string> | Failure<'unknownError'>>
   {
     // This op calls Op.run() which calls another Op.run() — tests reentrancy
     const innerOutcome = await OutOfBandCallerOp.run();
@@ -79,16 +68,6 @@ test('runOutOfBand executes a simple op and returns its outcome', async () =>
   // The main runner's stack should be unaffected
   const mainOutcome = await runner.run();
   expect(mainOutcome).toEqual({ ok: true, value: 'root' });
-  resetRunner();
-});
-
-test('runOutOfBand handles control flow (replaceWith)', async () =>
-{
-  resetRunner();
-  const runner = await OpRunner.create(new SimpleOp('root'), { mode: 'test' });
-  const outcome = await runner.runOutOfBand(new ReplacingOp());
-
-  expect(outcome).toEqual({ ok: true, value: 'replaced' });
   resetRunner();
 });
 
@@ -165,39 +144,12 @@ test('Op.run() creates fresh runner after previous runner completed', async () =
   resetRunner();
 });
 
-test('instance run() works for simple ops (terminal outcomes)', async () =>
+test('instance run() goes through OpRunner', async () =>
 {
   resetRunner();
-  // Calling instance run() directly bypasses OpRunner entirely.
-  // It works fine for ops that return terminal outcomes.
   const op = new SimpleOp('direct');
   const outcome = await op.run();
   expect(outcome).toEqual({ ok: true, value: 'direct' });
-  resetRunner();
-});
-
-test('instance run() returns raw control flow value (not a terminal outcome) for ops using replaceWith', async () =>
-{
-  resetRunner();
-  // When an op uses replaceWith(), calling instance run() directly returns
-  // the control flow value instead of the terminal outcome. OpRunner is
-  // needed to process control flow. This test documents the limitation.
-  const op = new ReplacingOp();
-  const result = await op.run();
-
-  // This is NOT a terminal outcome — it's a raw control flow value.
-  // It has a Symbol key, not ok/value/failure.
-  expect('ok' in result).toBe(false);
-  resetRunner();
-});
-
-test('static Op.run() handles control flow correctly (contrast with instance run())', async () =>
-{
-  resetRunner();
-  // The static Op.run() goes through OpRunner, which processes control flow.
-  // So replaceWith() works correctly and returns the terminal outcome.
-  const outcome = await ReplacingOp.run();
-  expect(outcome).toEqual({ ok: true, value: 'replaced' });
   resetRunner();
 });
 
@@ -215,11 +167,11 @@ test('runOutOfBand shares IOContext with primary runner', async () =>
   });
   const runner = await OpRunner.create(new SimpleOp('root'), { mode: 'test' }, io);
 
-  // Run a PrintOp-like thing out of band — it should write to the same stdout
+  // Run a PrintingOp-like thing out of band — it should write to the same stdout
   class PrintingOp extends Op<void, never>
   {
     name = 'PrintingOp';
-    async run(): Promise<Success<void>>
+    async execute(): Promise<Success<void>>
     {
       this.io.stdout.write('oob-output');
       return this.succeed(undefined);

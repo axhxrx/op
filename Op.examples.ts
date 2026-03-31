@@ -75,7 +75,7 @@ export class FetchUserOp extends Op<
     return `FetchUserOp(${this.userId})`;
   }
 
-  async run()
+  async execute()
   {
     await Promise.resolve();
     try

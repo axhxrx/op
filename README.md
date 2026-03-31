@@ -64,9 +64,11 @@ Bite the bullet, and fix the underlying design (accepting breaking changes neces
 
 The stack-based `OpRunner` is convenient, standardizes the most common `Op` execution model, and reduces how much thinking needs to be done (by human or bot) when composing ops into larger functionality. But, since its introduction, it had tension with the simpler `myOp.run()` (or the static equivalent). Mixing and matching direct invocation of ops with delegation of op execution to `OpRunner` was error-prone, with non-obvious pitfalls.
 
-With 1.0.0, the design was changed. The `OpRunner` class is now more constrained — there should be only one instance, now; we accept a little more funky constraints around `OpRunner` in exchange for unification of the Op execution model. All `Op` instances now execute via _the_ `OpRunner` (no longer "_an_ `OpRunner`"). To make this happen, we extended `OpRunner` to manage a "stack of stacks" instead of just one stack, and directly invoking an op (via `.run()`) now pushes a new stack onto the... "stack stack"? (🙈 lol), asynchronously executes that stack to completion and discards it, returning its terminal result to whatever was executing on the original stack.
+With 1.0.0, the design was changed. The `OpRunner` class is now more constrained — there should be only one instance, now; we accept a little more funky constraints around `OpRunner` in exchange for unification of the Op execution model. All `Op` instances now execute via _the_ `OpRunner` (no longer "_an_ `OpRunner`"). To make this happen, we extended `OpRunner` in 0.9.3 to be able to run operations "out of band" on a different stack than the main one, and then return control.
 
-This is more complicated to explain, but the net effect is more simplicity at the point of use, and the elimination of the tension between the two op execution models that didn't work well in tandem.
+However, that made it obvious that really fixing the the problem all the way required a backwards incompatible redesign (hence 1.x). We simplified the outcome type by removing the control flow variants (which were a dumb idea in the first place), and separating `run()` from `execute()` (invocation vs implementation).
+
+The net effect is more simplicity at the point of use, and the elimination of the tension between the two op execution models that didn't work well in tandem.
 
 - 2026-03-31 💥 1.0.0 — introduce new hopefully-better execution model, to make direct op invocation and stack-based invocation stop fighting
 

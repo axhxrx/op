@@ -74,7 +74,7 @@ export class PrintOp extends Op<string, PrintOpFailure>
     return `PrintOp`;
   }
 
-  async run(): Promise<PrintOpOutcome>
+  async execute(): Promise<PrintOpOutcome>
   {
     await Promise.resolve();
     try

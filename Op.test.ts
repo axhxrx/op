@@ -39,7 +39,6 @@ test('PrintOp - ProhibitedWord failure', async () =>
     switch (failure)
     {
       case 'ProhibitedWord':
-        // assertEquals(failure, "ProhibitedWord");
         expect(failure).toBe('ProhibitedWord');
         break;
       case 'MessageTooLong':
@@ -63,9 +62,7 @@ test('PrintOp - MessageTooLong failure', async () =>
 
   if (!outcome.ok)
   {
-    // assertEquals(outcome.failure, 'MessageTooLong');
     expect(outcome.failure).toBe('MessageTooLong');
-    // assertEquals(outcome.debugData, `Length: ${longMessage.length}, Max: 100`);
     expect(outcome.debugData).toBe(`Length: ${longMessage.length}, Max: 100`);
   }
   else
@@ -182,7 +179,7 @@ class CalculateOp extends Op<
     return `CalculateOp(${this.a}, ${this.b})`;
   }
 
-  async run()
+  async execute()
   {
     await Promise.resolve();
     if (this.a < 0 || this.b < 0)
@@ -207,7 +204,7 @@ class StaticRunFinalOp extends Op<string, 'unknownError'>
 {
   name = 'StaticRunFinalOp';
 
-  async run()
+  async execute()
   {
     await Promise.resolve();
     return this.succeed('terminal result');
@@ -218,10 +215,12 @@ class StaticRunRootOp extends Op<string, 'unknownError'>
 {
   name = 'StaticRunRootOp';
 
-  async run()
+  async execute()
   {
-    await Promise.resolve();
-    return this.replaceWith(new StaticRunFinalOp());
+    // In the new model, ops run children via run() which goes through OpRunner
+    const childOutcome = await new StaticRunFinalOp().run();
+    if (!childOutcome.ok) return this.failWithUnknownError();
+    return this.succeed(childOutcome.value);
   }
 }
 
@@ -272,7 +271,7 @@ test('CalculateOp - failure cases', async () =>
   }
 });
 
-test('Op.run() executes through OpRunner and returns terminal outcome', async () =>
+test('Op.run() static method executes through OpRunner and returns outcome', async () =>
 {
   const outcome = await StaticRunRootOp.run();
 
@@ -334,7 +333,6 @@ test('Type narrowing works correctly', async () =>
 
   // Before narrowing, outcome is a union type
   type _OutcomeType = typeof outcome;
-  // _OutcomeType = Success<string> | Failure<'ProhibitedWord' | 'MessageTooLong' | 'unknownError'>
 
   if (outcome.ok)
   {
@@ -350,7 +348,7 @@ test('Type narrowing works correctly', async () =>
   else
   {
     // After narrowing, TypeScript knows it's Failure<...>
-    type _FailureType = typeof outcome; // Failure<'ProhibitedWord' | 'MessageTooLong' | 'unknownError'>
+    type _FailureType = typeof outcome;
     const _failure = outcome.failure;
     const _debugData = outcome.debugData;
     // @ts-expect-error - 'value' doesn't exist on Failure type
@@ -364,7 +362,7 @@ test('Op.io returns SharedContext.effectiveIOContext', () =>
   class IOAccessOp extends Op<string, never>
   {
     name = 'IOAccessOp';
-    async run()
+    async execute()
     {
       await Promise.resolve();
       // Access this.io to prove it works
@@ -401,7 +399,7 @@ test('Op.fail includes debugData when provided', async () =>
   class FailDebugOp extends Op<never, 'badThing'>
   {
     name = 'FailDebugOp';
-    async run()
+    async execute()
     {
       await Promise.resolve();
       return this.fail('badThing' as const, 'extra info here');
@@ -419,7 +417,7 @@ test('Op.failWithUnknownError includes debugData', async () =>
   class UnknownFailOp extends Op<never, 'unknownError'>
   {
     name = 'UnknownFailOp';
-    async run()
+    async execute()
     {
       await Promise.resolve();
       return this.failWithUnknownError('something went wrong');
@@ -437,7 +435,7 @@ test('Op.cancel returns standard canceled failure', async () =>
   class CancelOp extends Op<never, 'canceled'>
   {
     name = 'CancelOp';
-    async run()
+    async execute()
     {
       await Promise.resolve();
       return this.cancel();

@@ -70,7 +70,7 @@ export class ExecOp extends Op<ExecResult, ExecOpFailure>
     this.name = `ExecOp(${command[0] ?? '?'})`;
   }
 
-  async run(): Promise<ExecOpOutcome>
+  async execute(): Promise<ExecOpOutcome>
   {
     const [cmd, ...args] = this.command;
     if (!cmd)
