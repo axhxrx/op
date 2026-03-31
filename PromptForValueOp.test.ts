@@ -1,5 +1,6 @@
-import { afterEach, expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { test } from 'node:test';
 import { InputRecording } from './InputRecording.ts';
 import { createIOContext } from './IOContext.ts';
 import { PromptForPasswordOp } from './PromptForPasswordOp.ts';
@@ -7,14 +8,14 @@ import { PromptForValueOp } from './PromptForValueOp.ts';
 import { RecordableStdin } from './RecordableStdin.ts';
 import { SharedContext } from './SharedContext.ts';
 
-afterEach(() =>
+function cleanup(): void
 {
   SharedContext.overrideDefaultIOContext = null;
   while (InputRecording.disabled)
   {
     InputRecording.removeProhibition();
   }
-});
+}
 
 class FakeTTYStream extends PassThrough
 {
@@ -38,74 +39,109 @@ async function createTestIO(source: PassThrough)
 
 test('PromptForValueOp succeeds with trimmed user input', async () =>
 {
-  const source = new PassThrough();
-  await createTestIO(source);
+  try
+  {
+    const source = new PassThrough();
+    await createTestIO(source);
 
-  const op = new PromptForValueOp('Name: ');
-  const runPromise = op.run();
+    const op = new PromptForValueOp('Name: ');
+    const runPromise = op.run();
 
-  source.write('Alice\n');
-  const outcome = await runPromise;
+    source.write('Alice\n');
+    const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: true, value: 'Alice' });
+    assert.deepStrictEqual(outcome, { ok: true, value: 'Alice' });
+  }
+  finally
+  {
+    cleanup();
+  }
 });
 
 test('PromptForValueOp trims whitespace from input', async () =>
 {
-  const source = new PassThrough();
-  await createTestIO(source);
+  try
+  {
+    const source = new PassThrough();
+    await createTestIO(source);
 
-  const op = new PromptForValueOp();
-  const runPromise = op.run();
+    const op = new PromptForValueOp();
+    const runPromise = op.run();
 
-  source.write('  spaced  \n');
-  const outcome = await runPromise;
+    source.write('  spaced  \n');
+    const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: true, value: 'spaced' });
+    assert.deepStrictEqual(outcome, { ok: true, value: 'spaced' });
+  }
+  finally
+  {
+    cleanup();
+  }
 });
 
 test('PromptForValueOp writes prompt to stdout', async () =>
 {
-  const source = new PassThrough();
-  const io = await createTestIO(source);
-  let stdoutData = '';
-  (io.stdout as PassThrough).on('data', (chunk: string) => stdoutData += chunk);
+  try
+  {
+    const source = new PassThrough();
+    const io = await createTestIO(source);
+    let stdoutData = '';
+    (io.stdout as PassThrough).on('data', (chunk: string) => stdoutData += chunk);
 
-  const op = new PromptForValueOp('Enter value: ');
-  const runPromise = op.run();
+    const op = new PromptForValueOp('Enter value: ');
+    const runPromise = op.run();
 
-  source.write('x\n');
-  await runPromise;
+    source.write('x\n');
+    await runPromise;
 
-  expect(stdoutData).toContain('Enter value: ');
+    assert.ok(stdoutData.includes('Enter value: '));
+  }
+  finally
+  {
+    cleanup();
+  }
 });
 
 test('PromptForValueOp returns canceled on EOF', async () =>
 {
-  const source = new PassThrough();
-  await createTestIO(source);
+  try
+  {
+    const source = new PassThrough();
+    await createTestIO(source);
 
-  const op = new PromptForValueOp();
-  const runPromise = op.run();
+    const op = new PromptForValueOp();
+    const runPromise = op.run();
 
-  source.end();
-  const outcome = await runPromise;
+    source.end();
+    const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: false, failure: 'canceled' });
+    assert.deepStrictEqual(outcome, { ok: false, failure: 'canceled' });
+  }
+  finally
+  {
+    cleanup();
+  }
 });
 
 test('PromptForValueOp succeeds with empty input', async () =>
 {
-  const source = new PassThrough();
-  await createTestIO(source);
+  try
+  {
+    const source = new PassThrough();
+    await createTestIO(source);
 
-  const op = new PromptForValueOp();
-  const runPromise = op.run();
+    const op = new PromptForValueOp();
+    const runPromise = op.run();
 
-  source.write('\n');
-  const outcome = await runPromise;
+    source.write('\n');
+    const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: true, value: '' });
+    assert.deepStrictEqual(outcome, { ok: true, value: '' });
+  }
+  finally
+  {
+    cleanup();
+  }
 });
 
 test('PromptForPasswordOp disables InputRecording during input', async () =>
@@ -128,56 +164,73 @@ test('PromptForPasswordOp disables InputRecording during input', async () =>
   try
   {
     const op = new PromptForPasswordOp('Token: ');
-    const runPromise = op.run();
+    // Call execute() directly to test internal InputRecording behavior
+    // without the async gap introduced by OpRunner scaffolding in run()
+    const runPromise = op.execute();
 
     // Write the password while InputRecording should be disabled
     source.write('secret123\n');
     const outcome = await runPromise;
 
-    expect(outcome).toEqual({ ok: true, value: 'secret123' });
+    assert.deepStrictEqual(outcome, { ok: true, value: 'secret123' });
 
     // The password should NOT appear in the recording
     const recording = recordableStdin.getRecording();
     const hasSecret = recording.some(e => e.data.includes('secret123'));
-    expect(hasSecret).toBe(false);
+    assert.strictEqual(hasSecret, false);
 
     // InputRecording should have removed only the prohibition it added
-    expect(InputRecording.disabled).toBe(false);
+    assert.strictEqual(InputRecording.disabled, false);
   }
   finally
   {
     recordableStdin.destroy();
     io.recordableStdin?.destroy();
+    cleanup();
   }
 });
 
 test('PromptForPasswordOp re-enables InputRecording even on EOF', async () =>
 {
-  const source = new PassThrough();
-  await createTestIO(source);
+  try
+  {
+    const source = new PassThrough();
+    await createTestIO(source);
 
-  const op = new PromptForPasswordOp();
-  const runPromise = op.run();
+    const op = new PromptForPasswordOp();
+    const runPromise = op.execute();
 
-  source.end();
-  const outcome = await runPromise;
+    source.end();
+    const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: false, failure: 'canceled' });
-  expect(InputRecording.disabled).toBe(false);
+    assert.deepStrictEqual(outcome, { ok: false, failure: 'canceled' });
+    assert.strictEqual(InputRecording.disabled, false);
+  }
+  finally
+  {
+    cleanup();
+  }
 });
 
 test('PromptForPasswordOp preserves surrounding whitespace in non-raw mode', async () =>
 {
-  const source = new PassThrough();
-  await createTestIO(source);
+  try
+  {
+    const source = new PassThrough();
+    await createTestIO(source);
 
-  const op = new PromptForPasswordOp();
-  const runPromise = op.run();
+    const op = new PromptForPasswordOp();
+    const runPromise = op.execute();
 
-  source.write('  secret123  \n');
-  const outcome = await runPromise;
+    source.write('  secret123  \n');
+    const outcome = await runPromise;
 
-  expect(outcome).toEqual({ ok: true, value: '  secret123  ' });
+    assert.deepStrictEqual(outcome, { ok: true, value: '  secret123  ' });
+  }
+  finally
+  {
+    cleanup();
+  }
 });
 
 test('PromptForPasswordOp preserves outer InputRecording prohibitions', async () =>
@@ -189,17 +242,18 @@ test('PromptForPasswordOp preserves outer InputRecording prohibitions', async ()
   try
   {
     const op = new PromptForPasswordOp();
-    const runPromise = op.run();
+    const runPromise = op.execute();
 
     source.write('secret123\n');
     const outcome = await runPromise;
 
-    expect(outcome).toEqual({ ok: true, value: 'secret123' });
-    expect(InputRecording.disabled).toBe(true);
+    assert.deepStrictEqual(outcome, { ok: true, value: 'secret123' });
+    assert.strictEqual(InputRecording.disabled, true);
   }
   finally
   {
     InputRecording.removeProhibition();
+    cleanup();
   }
 });
 
@@ -216,16 +270,17 @@ test('PromptForPasswordOp restores prior raw mode when stdin is wrapped', async 
   try
   {
     const op = new PromptForPasswordOp('Token: ');
-    const runPromise = op.run();
+    const runPromise = op.execute();
 
     source.write('  secret123  \n');
     const outcome = await runPromise;
 
-    expect(outcome).toEqual({ ok: true, value: '  secret123  ' });
-    expect(source.isRaw).toBe(true);
+    assert.deepStrictEqual(outcome, { ok: true, value: '  secret123  ' });
+    assert.strictEqual(source.isRaw, true);
   }
   finally
   {
     io.recordableStdin?.destroy();
+    cleanup();
   }
 });

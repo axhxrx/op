@@ -1,5 +1,5 @@
-import { expect, test } from 'bun:test';
-import type { IOContext } from './IOContext.ts';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { Op } from './Op.ts';
 
 /**
@@ -16,7 +16,7 @@ class CancelableOp extends Op<string, 'canceled'>
     this.shouldCancel = shouldCancel;
   }
 
-  async run(_io?: IOContext)
+  async execute()
   {
     await Promise.resolve();
 
@@ -34,11 +34,11 @@ test('Op.cancel() returns standard canceled failure', async () =>
   const op = new CancelableOp(true);
   const outcome = await op.run();
 
-  expect(outcome.ok).toBe(false);
+  assert.strictEqual(outcome.ok, false);
 
   if (!outcome.ok)
   {
-    expect(outcome.failure).toBe('canceled');
+    assert.strictEqual(outcome.failure, 'canceled');
     // Type system should know this is 'canceled' literal
     const _failureType: 'canceled' | 'unknownError' = outcome.failure;
   }
@@ -49,11 +49,11 @@ test('Cancelable op can also succeed', async () =>
   const op = new CancelableOp(false);
   const outcome = await op.run();
 
-  expect(outcome.ok).toBe(true);
+  assert.strictEqual(outcome.ok, true);
 
   if (outcome.ok)
   {
-    expect(outcome.value).toBe('completed');
+    assert.strictEqual(outcome.value, 'completed');
   }
 });
 
@@ -69,7 +69,7 @@ test('Cancellation can be distinguished from other failures', async () =>
     {
       case 'canceled':
       {
-        expect(true).toBe(true); // This should be the path taken
+        assert.strictEqual(true, true); // This should be the path taken
         break;
       }
       // @ts-expect-error This type isn't possible, AFATSK

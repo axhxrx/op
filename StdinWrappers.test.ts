@@ -1,9 +1,10 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import type { Buffer } from 'node:buffer';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
+import { test } from 'node:test';
 import { InputRecording } from './InputRecording.ts';
 import { RecordableStdin, type Session } from './RecordableStdin.ts';
 import { ReplayableStdin } from './ReplayableStdin.ts';
@@ -56,24 +57,23 @@ test('RecordableStdin supports both data and readable consumers and detaches lis
   });
   collectReadableChunks(first, readableChunks);
 
-  expect(source.listenerCount('data')).toBe(2);
+  assert.strictEqual(source.listenerCount('data'), 2);
 
   source.write('hello');
 
-  expect(dataChunks).toEqual(['hello']);
-  expect(readableChunks).toEqual(['hello']);
-  expect(first.getRecording()).toEqual([
-    {
-      timestamp: expect.any(Number),
-      data: 'hello',
-    },
-  ]);
+  assert.deepStrictEqual(dataChunks, ['hello']);
+  assert.deepStrictEqual(readableChunks, ['hello']);
+
+  const recording = first.getRecording();
+  assert.strictEqual(recording.length, 1);
+  assert.strictEqual(typeof recording[0]!.timestamp, 'number');
+  assert.strictEqual(recording[0]!.data, 'hello');
 
   first.destroy();
-  expect(source.listenerCount('data')).toBe(1);
+  assert.strictEqual(source.listenerCount('data'), 1);
 
   second.destroy();
-  expect(source.listenerCount('data')).toBe(0);
+  assert.strictEqual(source.listenerCount('data'), 0);
 });
 
 test('RecordableStdin.saveSession returns the persisted session payload', async () =>
@@ -90,13 +90,11 @@ test('RecordableStdin.saveSession returns the persisted session payload', async 
     const session = await stdin.saveSession(sessionPath);
     const savedSession = JSON.parse(await readFile(sessionPath, 'utf8')) as Session;
 
-    expect(session).toEqual(savedSession);
-    expect(session.events).toEqual([
-      {
-        timestamp: expect.any(Number),
-        data: 'hello',
-      },
-    ]);
+    assert.deepStrictEqual(session, savedSession);
+
+    assert.strictEqual(session.events.length, 1);
+    assert.strictEqual(typeof session.events[0]!.timestamp, 'number');
+    assert.strictEqual(session.events[0]!.data, 'hello');
   }
   finally
   {
@@ -126,17 +124,14 @@ test('RecordableStdin skips persisted chunks while InputRecording is disabled', 
     InputRecording.removeProhibition();
     source.write('public-2');
 
-    expect(dataChunks).toEqual(['public-1', 'secret', 'public-2']);
-    expect(stdin.getRecording()).toEqual([
-      {
-        timestamp: expect.any(Number),
-        data: 'public-1',
-      },
-      {
-        timestamp: expect.any(Number),
-        data: 'public-2',
-      },
-    ]);
+    assert.deepStrictEqual(dataChunks, ['public-1', 'secret', 'public-2']);
+
+    const recording = stdin.getRecording();
+    assert.strictEqual(recording.length, 2);
+    assert.strictEqual(typeof recording[0]!.timestamp, 'number');
+    assert.strictEqual(recording[0]!.data, 'public-1');
+    assert.strictEqual(typeof recording[1]!.timestamp, 'number');
+    assert.strictEqual(recording[1]!.data, 'public-2');
   }
   finally
   {
@@ -174,13 +169,13 @@ test('ReplayableStdin.setRawMode during replay is buffered and applied on switch
 
     // During replay, setRawMode should be buffered, not applied
     stdin.setRawMode(true);
-    expect(rawModeValue).toBeUndefined();
+    assert.strictEqual(rawModeValue, undefined);
 
     stdin.startReplay(0);
     await waitFor(() => !stdin.isReplayActive());
 
     // After replay, the buffered raw mode should be applied
-    expect(rawModeValue).toBe(true);
+    assert.strictEqual(rawModeValue, true);
 
     stdin.destroy();
   }
@@ -219,7 +214,7 @@ test('ReplayableStdin does not force raw mode if setRawMode was never called dur
     await waitFor(() => !stdin.isReplayActive());
 
     // Raw mode should NOT have been set
-    expect(rawModeSet).toBe(false);
+    assert.strictEqual(rawModeSet, false);
 
     stdin.destroy();
   }
@@ -256,23 +251,23 @@ test('ReplayableStdin emits replayed data to both data and readable consumers an
     });
     collectReadableChunks(stdin, readableChunks);
 
-    expect(source.listenerCount('data')).toBe(0);
+    assert.strictEqual(source.listenerCount('data'), 0);
 
     stdin.startReplay(0);
 
     await waitFor(() => !stdin.isReplayActive());
 
-    expect(dataChunks).toEqual(['replay']);
-    expect(readableChunks).toEqual(['replay']);
-    expect(source.listenerCount('data')).toBe(1);
+    assert.deepStrictEqual(dataChunks, ['replay']);
+    assert.deepStrictEqual(readableChunks, ['replay']);
+    assert.strictEqual(source.listenerCount('data'), 1);
 
     source.write('interactive');
 
-    expect(dataChunks).toEqual(['replay', 'interactive']);
-    expect(readableChunks).toEqual(['replay', 'interactive']);
+    assert.deepStrictEqual(dataChunks, ['replay', 'interactive']);
+    assert.deepStrictEqual(readableChunks, ['replay', 'interactive']);
 
     stdin.destroy();
-    expect(source.listenerCount('data')).toBe(0);
+    assert.strictEqual(source.listenerCount('data'), 0);
   }
   finally
   {
@@ -291,7 +286,7 @@ test('BufferedStdin.read returns null when buffer is empty', () =>
 
   try
   {
-    expect(stdin.read()).toBeNull();
+    assert.strictEqual(stdin.read(), null);
   }
   finally
   {
@@ -310,13 +305,13 @@ test('BufferedStdin.read with size returns partial data', () =>
 
     // Read only 5 bytes
     const chunk = stdin.read(5);
-    expect(chunk).toBeDefined();
-    expect(chunk!.toString()).toBe('hello');
+    assert.notStrictEqual(chunk, undefined);
+    assert.strictEqual(chunk!.toString(), 'hello');
 
     // Remaining data should still be available
     const rest = stdin.read();
-    expect(rest).toBeDefined();
-    expect(rest!.toString()).toBe(' world');
+    assert.notStrictEqual(rest, undefined);
+    assert.strictEqual(rest!.toString(), ' world');
   }
   finally
   {
@@ -335,7 +330,7 @@ test('BufferedStdin.unshift puts data back at front of buffer', () =>
 
     // Read it
     const chunk = stdin.read();
-    expect(chunk!.toString()).toBe('world');
+    assert.strictEqual(chunk!.toString(), 'world');
 
     // Push it back
     stdin.unshift('hello ');
@@ -344,8 +339,8 @@ test('BufferedStdin.unshift puts data back at front of buffer', () =>
     // Read both — unshifted items come first
     const first = stdin.read();
     const second = stdin.read();
-    expect(first!.toString()).toBe('world');
-    expect(second!.toString()).toBe('hello ');
+    assert.strictEqual(first!.toString(), 'world');
+    assert.strictEqual(second!.toString(), 'hello ');
   }
   finally
   {
@@ -364,8 +359,8 @@ test('BufferedStdin.setEncoding causes read to return strings', () =>
     source.write('hello');
 
     const chunk = stdin.read();
-    expect(typeof chunk).toBe('string');
-    expect(chunk).toBe('hello');
+    assert.strictEqual(typeof chunk, 'string');
+    assert.strictEqual(chunk, 'hello');
   }
   finally
   {
@@ -384,19 +379,19 @@ test('BufferedStdin.destroy is idempotent', () =>
   stdin.destroy();
   stdin.destroy(); // second destroy should be a no-op
 
-  expect(closeCount).toBe(1);
+  assert.strictEqual(closeCount, 1);
 });
 
 test('BufferedStdin.isTTY delegates to source', () =>
 {
   const source = new PassThrough();
   const nonTTY = new RecordableStdin(source);
-  expect(nonTTY.isTTY).toBe(false);
+  assert.strictEqual(nonTTY.isTTY, false);
   nonTTY.destroy();
 
   const ttySource = Object.assign(new PassThrough(), { isTTY: true });
   const ttyStdin = new RecordableStdin(ttySource);
-  expect(ttyStdin.isTTY).toBe(true);
+  assert.strictEqual(ttyStdin.isTTY, true);
   ttyStdin.destroy();
 });
 
@@ -416,10 +411,10 @@ test('RecordableStdin records multiple events with increasing timestamps', async
     source.write('b');
 
     const recording = stdin.getRecording();
-    expect(recording).toHaveLength(2);
-    expect(recording[0]!.data).toBe('a');
-    expect(recording[1]!.data).toBe('b');
-    expect(recording[1]!.timestamp).toBeGreaterThanOrEqual(recording[0]!.timestamp);
+    assert.strictEqual(recording.length, 2);
+    assert.strictEqual(recording[0]!.data, 'a');
+    assert.strictEqual(recording[1]!.data, 'b');
+    assert.ok(recording[1]!.timestamp >= recording[0]!.timestamp);
   }
   finally
   {
@@ -436,8 +431,8 @@ test('RecordableStdin ignores data after destroy', () =>
   stdin.destroy();
   source.write('after');
 
-  expect(stdin.getRecording()).toHaveLength(1);
-  expect(stdin.getRecording()[0]!.data).toBe('before');
+  assert.strictEqual(stdin.getRecording().length, 1);
+  assert.strictEqual(stdin.getRecording()[0]!.data, 'before');
 });
 
 test('RecordableStdin.getEventCount matches recording length', () =>
@@ -447,11 +442,11 @@ test('RecordableStdin.getEventCount matches recording length', () =>
 
   try
   {
-    expect(stdin.getEventCount()).toBe(0);
+    assert.strictEqual(stdin.getEventCount(), 0);
     source.write('a');
-    expect(stdin.getEventCount()).toBe(1);
+    assert.strictEqual(stdin.getEventCount(), 1);
     source.write('b');
-    expect(stdin.getEventCount()).toBe(2);
+    assert.strictEqual(stdin.getEventCount(), 2);
   }
   finally
   {
@@ -468,7 +463,7 @@ test('RecordableStdin.setRawMode on non-TTY source is a no-op', () =>
   {
     // Should not throw
     const result = stdin.setRawMode(true);
-    expect(result).toBe(stdin); // returns this
+    assert.strictEqual(result, stdin); // returns this
   }
   finally
   {
@@ -505,7 +500,7 @@ test('ReplayableStdin with empty session immediately switches to interactive', a
     stdin.on('data', (chunk: Buffer | string) => chunks.push(chunk.toString()));
     source.write('live');
 
-    expect(chunks).toEqual(['live']);
+    assert.deepStrictEqual(chunks, ['live']);
     stdin.destroy();
   }
   finally
@@ -537,7 +532,7 @@ test('ReplayableStdin.startReplay when destroyed is a no-op', async () =>
 
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
     // If we get here without error, the no-op behavior is correct
-    expect(stdin.isReplayActive()).toBe(true); // still flagged as replaying since switchToInteractive never ran
+    assert.strictEqual(stdin.isReplayActive(), true); // still flagged as replaying since switchToInteractive never ran
   }
   finally
   {
@@ -562,10 +557,10 @@ test('ReplayableStdin.isReplayActive returns false after replay completes', asyn
     await writeFile(sessionPath, JSON.stringify(session), 'utf-8');
     const stdin = await ReplayableStdin.create(sessionPath, source);
 
-    expect(stdin.isReplayActive()).toBe(true);
+    assert.strictEqual(stdin.isReplayActive(), true);
     stdin.startReplay(0);
     await waitFor(() => !stdin.isReplayActive());
-    expect(stdin.isReplayActive()).toBe(false);
+    assert.strictEqual(stdin.isReplayActive(), false);
 
     stdin.destroy();
   }

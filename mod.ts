@@ -9,8 +9,6 @@ export { createIOContext } from './IOContext.ts';
 export { createDefaultLogger, Logger } from './Logger.ts';
 
 // Type guards
-export { isHandler } from './HandlerWithMeta.ts';
-export type { HandlerWithMeta } from './HandlerWithMeta.ts';
 export { isOp } from './isOp.ts';
 
 // Args
@@ -27,6 +25,9 @@ export { ReplayableStdin } from './ReplayableStdin.ts';
 export { hasAnsi, stripAnsi, stripAnsiFromLines } from './stripAnsi.ts';
 export { TeeStream, TeeStreamLogSink } from './TeeStream.ts';
 export type { TeeStreamOptions, TeeStreamPair, TeeStreamTerminalStreams } from './TeeStream.ts';
+
+// Console monkey-patch
+export { isConsolePatched, patchConsole, unpatchConsole } from './patchConsole.ts';
 
 // Simple ops
 export { ExecOp } from './ExecOp.ts';

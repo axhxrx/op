@@ -1,7 +1,10 @@
 import { type OpRunnerArgs, parseOpRunnerArgs } from './args.ts';
+import { createIOContext } from './IOContext.ts';
 import type { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
 import type { OutcomeOf } from './Outcome.ts';
+import { patchConsole } from './patchConsole.ts';
+import { SharedContext } from './SharedContext.ts';
 
 /**
  The result of calling `init()`. Provides everything an app needs to run ops.
@@ -28,6 +31,8 @@ export type InitResult = {
 
  Separates ops-specific args (--record, --replay, --log) from your app's args, and returns a pre-configured `opsMain` function that you call with your root op.
 
+ Note: `init()` is synchronous, so IOContext (including TeeStream for `--log`) is not created until `opsMain()` is called. Any `console.log()` between `init()` and `opsMain()` will print to the terminal but will NOT be captured by `--log`. If you need setup-time logging to be captured, use `main()` instead, which creates IOContext eagerly.
+
  @example
  ```typescript
  import { init } from '@axhxrx/op';
@@ -52,13 +57,24 @@ export type InitResult = {
  */
 export function init(rawArgs: string[]): InitResult
 {
+  patchConsole();
+
   const { opRunner, remaining } = parseOpRunnerArgs(rawArgs);
 
   async function opsMain<T extends Op<unknown, unknown>>(initialOp: T): Promise<OutcomeOf<T>>
   {
-    const runner = await OpRunner.create(initialOp, opRunner);
-    const finalResult = await runner.run();
-    return finalResult;
+    const io = await createIOContext(opRunner);
+    SharedContext.overrideDefaultIOContext = io;
+
+    try
+    {
+      const runner = await OpRunner.create(initialOp, opRunner, io);
+      return await runner.run();
+    }
+    finally
+    {
+      SharedContext.overrideDefaultIOContext = null;
+    }
   }
 
   return {

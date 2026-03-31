@@ -1,24 +1,22 @@
 import { appendFileSync, writeFileSync } from 'node:fs';
 import type { OpRunnerArgs } from './args.ts';
-import { type HandlerWithMeta, isHandler } from './HandlerWithMeta.ts';
 import { createIOContext, type IOContext } from './IOContext.ts';
-import { isOp } from './isOp.ts';
 import type { Op } from './Op.ts';
 import {
-  isOpWithHandler,
   isOutcome,
-  isReplaceOp,
-  OP_CONTROL,
   type OutcomeOf,
 } from './Outcome.ts';
+import { patchConsole } from './patchConsole.ts';
 
 /**
  Stack-based operation runner with full observability
 
+ In the 1.0 model, ops return terminal Outcomes only. Child ops are invoked directly via `childOp.run()`, which delegates to `runOutOfBand()` on the default runner. The stack is used for reentrant save/restore — each out-of-band execution saves the current stack, runs the child on a fresh stack, then restores.
+
  Benefits:
  - Centralized observability: ONE place where all op transitions happen
- - Log every op that runs, time every op, see full stack at any point
- - Separation of concerns: Ops describe intent, don't control execution
+ - Log every op that runs, time every op
+ - Separation of concerns: Ops describe intent, runner manages lifecycle
  - Easy to add hooks/middleware later (before/after, metrics, tracing, etc.)
  - Testing: Easier to test ops in isolation
  */
@@ -34,7 +32,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
    */
   static logFilePath = './op-runner-log.txt';
 
-  private stack: Array<Op<unknown, unknown> | HandlerWithMeta> = []; // Single stack containing both Ops and Handlers
+  private stack: Array<Op<unknown, unknown>> = [];
 
   private finalOutcome?: OutcomeOf<T>;
   private io: IOContext;
@@ -56,9 +54,9 @@ export class OpRunner<T extends Op<unknown, unknown>>
   protected static _default?: OpRunner<Op<unknown, unknown>>;
 
   /**
-   This reference is stored mainly for debugging.
+   The default (and typically only) OpRunner instance for the program. Used by `Op.run()` to delegate to `runOutOfBand()` instead of creating a new runner.
    */
-  protected static get default(): OpRunner<Op<unknown, unknown>> | undefined
+  static get default(): OpRunner<Op<unknown, unknown>> | undefined
   {
     return this._default;
   }
@@ -72,19 +70,64 @@ export class OpRunner<T extends Op<unknown, unknown>>
   }
 
   /**
-   Create an OpRunner instance (async because IO setup may be async). This is the only way to create an OpRunner, the constructor is private.
+   Create an OpRunner instance (async because IO setup may be async).
 
-   As side effect, this also updates the `OpRunner.defaultIOContext` reference (it just points to the last created instance), which is used  by ops that want to access "the current IOContext" without having it passed in — this is hacky, but it supports the simple case of "I just want to run this op and have it access stdin/stdout" without having to thread the IOContext through every call. A future version of this library may improve this.
+   **Most consumers should use `main()`, `init()`, or `Op.run()` instead.** This is a lower-level API for advanced use cases like custom entry points or test harnesses.
+
+   As a side effect, this patches `console.log`/`warn`/`error` to flow through the IOContext (idempotent), and sets this runner as the global default. The default runner's IOContext is used by `SharedContext.effectiveIOContext`, which is what `console.log` and `this.io` resolve to.
+
+   Creating multiple OpRunners is discouraged — the last one created becomes the default, and all console output routes to its IOContext. For running additional ops within an already-running program, use `Op.run()` (the static method), which delegates to the default runner's `runOutOfBand()` rather than creating a new runner.
+
+   If `existingIO` is provided, that IOContext is used instead of creating a new one. This is used by `main()` to eagerly create the IOContext before the op factory runs, so that setup-time logging is captured by TeeStream.
    */
   static async create<T extends Op<unknown, unknown>>(
     initialOp: T,
     ioConfig: OpRunnerArgs = { mode: 'interactive' },
+    existingIO?: IOContext,
   ): Promise<OpRunner<T>>
   {
-    const io = await createIOContext(ioConfig);
+    patchConsole();
+
+    const io = existingIO ?? await createIOContext(ioConfig);
     const runner = new OpRunner(initialOp, ioConfig, io);
     this._default = runner as OpRunner<Op<unknown, unknown>>;
     return runner;
+  }
+
+  /**
+   Run an op on a temporary stack, reusing this runner's IOContext.
+
+   This is the mechanism behind `Op.run()` when called within an already-running program. It creates a fresh stack for the op, executes it, and returns the terminal outcome. The primary stack is suspended during execution and restored afterward.
+
+   This method is reentrant — an op running out-of-band can itself call `Op.run()`, which will nest another out-of-band execution. Each level saves and restores via local variables on the JS call stack, so there's no interleaving.
+   */
+  async runOutOfBand<U extends Op<unknown, unknown>>(op: U): Promise<OutcomeOf<U>>
+  {
+    const savedStack = this.stack;
+    const savedOutcome = this.finalOutcome;
+
+    this.stack = [op];
+    this.finalOutcome = undefined;
+
+    try
+    {
+      while (await this.runStep())
+      {
+        // runStep() operates on this.stack, which is now the temporary stack
+      }
+
+      if (this.finalOutcome === undefined)
+      {
+        throw new Error(`[OpRunner] Out-of-band execution of ${op.name} completed without a terminal outcome`);
+      }
+
+      return this.finalOutcome as OutcomeOf<U>;
+    }
+    finally
+    {
+      this.stack = savedStack;
+      this.finalOutcome = savedOutcome;
+    }
   }
 
   /**
@@ -132,19 +175,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
    */
   private formatStack(): string
   {
-    return `[${
-      this.stack.map(item =>
-      {
-        if (isOp(item))
-        {
-          return item.name;
-        }
-        else
-        {
-          return `Handler<${item.parentName}>`;
-        }
-      }).join(', ')
-    }]`;
+    return `[${this.stack.map(op => op.name).join(', ')}]`;
   }
 
   /**
@@ -161,20 +192,11 @@ export class OpRunner<T extends Op<unknown, unknown>>
       return false; // Stack empty, execution complete
     }
 
-    const top = this.stack[this.stack.length - 1];
-    if (!top)
+    const op = this.stack[this.stack.length - 1];
+    if (!op)
     {
       throw new Error('[OpRunner] Internal error: stack top is undefined');
     }
-
-    // Check if top is a handler - this should never happen at loop start
-    if (isHandler(top))
-    {
-      throw new Error('[OpRunner] Internal error: Handler at top of stack without outcome');
-    }
-
-    // Top is an Op - run it
-    const op = top;
 
     if (OpRunner.opLoggingEnabled)
     {
@@ -185,49 +207,14 @@ export class OpRunner<T extends Op<unknown, unknown>>
     }
 
     const opStartTime = Date.now();
-    const result = await op.run(this.io);
+    const result = await op.execute();
     const opDuration = Date.now() - opStartTime;
-
-    // STEP 1: Control-flow values are handled before terminal outcomes
-    if (isOpWithHandler(result))
-    {
-      const handlerWithMeta: HandlerWithMeta = {
-        [OP_CONTROL]: 'handler',
-        handler: result.handler,
-        parentName: op.name,
-      };
-
-      this.stack[this.stack.length - 1] = handlerWithMeta; // Replace op with handler
-      this.stack.push(result.op); // Push child
-
-      if (OpRunner.opLoggingEnabled)
-      {
-        this.logToFile(`↪ ${op.name} yielded child ${result.op.name} (${opDuration}ms)`);
-        this.logToFile(`REPLACED ${op.name} with Handler<${op.name}>`);
-        this.logToFile(`PUSHED ${result.op.name}`);
-        this.logToFile(`Stack is now: ${this.formatStack()}`);
-        this.logToFile('');
-      }
-      return true; // More work to do
-    }
-
-    if (isReplaceOp(result))
-    {
-      this.stack[this.stack.length - 1] = result.op;
-
-      if (OpRunner.opLoggingEnabled)
-      {
-        this.logToFile(`↪ ${op.name} replaced itself with ${result.op.name} (${opDuration}ms)`);
-        this.logToFile(`REPLACED ${op.name} with ${result.op.name}`);
-        this.logToFile(`Stack is now: ${this.formatStack()}`);
-        this.logToFile('');
-      }
-      return true; // More work to do
-    }
 
     if (!isOutcome(result))
     {
-      throw new Error(`[OpRunner] ${op.name} returned an invalid result`);
+      throw new Error(
+        `[OpRunner] ${op.name}.execute() returned an invalid result (expected Outcome, got ${typeof result})`,
+      );
     }
 
     const outcome = result;
@@ -250,46 +237,13 @@ export class OpRunner<T extends Op<unknown, unknown>>
       }
     }
 
-    // STEP 2: Op completed - pop it and check if there's a handler waiting
+    // Pop the completed op
     this.stack.pop();
 
     if (OpRunner.opLoggingEnabled)
     {
       this.logToFile(`POPPED ${op.name}`);
       this.logToFile(`Stack is now: ${this.formatStack()}`);
-    }
-
-    // Check if top of stack is now a handler
-    if (this.stack.length > 0)
-    {
-      const top = this.stack[this.stack.length - 1];
-      if (top && isHandler(top))
-      {
-        // Call handler with outcome
-        const nextOp = top.handler(outcome);
-
-        if (!isOp(nextOp))
-        {
-          throw new Error(`[OpRunner] Handler for ${top.parentName} returned an invalid op`);
-        }
-
-        // Replace handler with the op it returned
-        this.stack[this.stack.length - 1] = nextOp;
-
-        if (OpRunner.opLoggingEnabled)
-        {
-          this.logToFile(`🔄 Handler returned: ${nextOp.name}`);
-          this.logToFile(`REPLACED Handler<${top.parentName}> with ${nextOp.name} (handler returned op)`);
-          this.logToFile(`Stack is now: ${this.formatStack()}`);
-          this.logToFile('');
-        }
-        return true; // More work to do
-      }
-    }
-
-    // If we reach here, op completed and there was no handler
-    if (OpRunner.opLoggingEnabled)
-    {
       if (outcome.ok && outcome.value !== undefined && outcome.value !== null)
       {
         this.logToFile(`   Value: ${JSON.stringify(outcome.value)}`);
@@ -306,26 +260,9 @@ export class OpRunner<T extends Op<unknown, unknown>>
   }
 
   /**
-   Run the op stack until empty using single-stack architecture
+   Run the op stack until empty.
 
-   Stack execution rules:
-   1. Run the top op on the stack
-   2. STEP 1: If op returns a child control value:
-      - REPLACE parent op with HandlerWithMeta on stack
-      - PUSH child op onto stack
-      - Stack becomes: [..., Handler<ParentName>, Child]
-   3. STEP 1: If op returns a replace control value:
-      - REPLACE current op with the returned op
-   4. STEP 2: When op completes (success or failure):
-      - POP the completed op from stack
-      - If top of stack is now a Handler:
-        * Call handler(outcome)
-        * REPLACE handler with the op it returns
-      - Otherwise, op is done (no handler waiting)
-   5. Repeat until stack is empty
-
-   Note: Handlers must exhaustively handle all child outcomes and always return an op
-   with the same terminal outcome type as the suspended parent.
+   Execution is simple: run the top op, get its outcome, pop it. If the op needs to run children, it calls `childOp.run()` internally, which delegates to `runOutOfBand()`.
    */
   async run(): Promise<OutcomeOf<T>>
   {
@@ -349,7 +286,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
         this.logToFile('🚀 Starting execution');
         this.logToFile(`Mode: ${this.io.mode}`);
         const firstOp = this.stack[0];
-        if (firstOp && isOp(firstOp))
+        if (firstOp)
         {
           this.logToFile(`INITIAL PUSH ${firstOp.name}. Stack is now: ${this.formatStack()}`);
         }
@@ -395,6 +332,14 @@ export class OpRunner<T extends Op<unknown, unknown>>
     {
       this.io.recordableStdin?.destroy();
       this.io.replayableStdin?.destroy();
+
+      // Clear the default runner reference so that subsequent Op.run() calls create a
+      // fresh runner rather than delegating to this now-finished one (which has destroyed
+      // recording/replay streams and a completed lifecycle).
+      if (OpRunner._default === (this as unknown))
+      {
+        OpRunner._default = undefined;
+      }
     }
   }
 
@@ -411,41 +356,13 @@ export class OpRunner<T extends Op<unknown, unknown>>
    */
   getStackSnapshot(): string[]
   {
-    return this.stack.map(item =>
-    {
-      if (isOp(item))
-      {
-        return item.name;
-      }
-      else
-      {
-        return `Handler<${item.parentName}>`;
-      }
-    });
-  }
-
-  /**
-   Get detailed stack snapshot with type information (useful for testing)
-   */
-  getStackContents(): Array<{ type: 'op' | 'handler'; name: string }>
-  {
-    return this.stack.map(item =>
-    {
-      if (isOp(item))
-      {
-        return { type: 'op', name: item.name };
-      }
-      else
-      {
-        return { type: 'handler', name: `Handler<${item.parentName}>` };
-      }
-    });
+    return this.stack.map(op => op.name);
   }
 
   /**
    Get raw stack (defensive copy for advanced testing)
    */
-  getStack(): ReadonlyArray<Op<unknown, unknown> | HandlerWithMeta>
+  getStack(): ReadonlyArray<Op<unknown, unknown>>
   {
     return [...this.stack];
   }

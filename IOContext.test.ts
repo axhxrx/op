@@ -1,5 +1,6 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { test } from 'node:test';
 import { createIOContext } from './IOContext.ts';
 import { RecordableStdin } from './RecordableStdin.ts';
 import { TeeStream } from './TeeStream.ts';
@@ -10,11 +11,11 @@ test('createIOContext in test mode without logFile returns plain streams', async
   const stderr = new PassThrough();
   const io = await createIOContext({ mode: 'test' }, { stdout, stderr });
 
-  expect(io.mode).toBe('test');
-  expect(io.stdout).toBe(stdout);
-  expect(io.stderr).toBe(stderr);
-  expect(io.recordableStdin).toBeUndefined();
-  expect(io.replayableStdin).toBeUndefined();
+  assert.strictEqual(io.mode, 'test');
+  assert.strictEqual(io.stdout, stdout);
+  assert.strictEqual(io.stderr, stderr);
+  assert.strictEqual(io.recordableStdin, undefined);
+  assert.strictEqual(io.replayableStdin, undefined);
 });
 
 test('createIOContext in record mode creates RecordableStdin', async () =>
@@ -27,9 +28,10 @@ test('createIOContext in record mode creates RecordableStdin', async () =>
 
   try
   {
-    expect(io.mode).toBe('record');
-    expect(io.recordableStdin).toBeInstanceOf(RecordableStdin);
-    expect(io.stdin).toBe(io.recordableStdin);
+    assert.strictEqual(io.mode, 'record');
+    assert.ok(io.recordableStdin instanceof RecordableStdin);
+    assert.notStrictEqual(io.recordableStdin, undefined);
+    assert.strictEqual(io.stdin, io.recordableStdin!);
   }
   finally
   {
@@ -39,9 +41,10 @@ test('createIOContext in record mode creates RecordableStdin', async () =>
 
 test('createIOContext in replay mode without sessionFile throws', async () =>
 {
-  await expect(
+  await assert.rejects(
     createIOContext({ mode: 'replay' }, { stdout: new PassThrough(), stderr: new PassThrough() }),
-  ).rejects.toThrow('--replay requires a session file');
+    /--replay requires a session file/,
+  );
 });
 
 test('createIOContext with logFile creates TeeStream stdout/stderr', async () =>
@@ -60,8 +63,8 @@ test('createIOContext with logFile creates TeeStream stdout/stderr', async () =>
       { stdout: new PassThrough(), stderr: new PassThrough() },
     );
 
-    expect(io.stdout).toBeInstanceOf(TeeStream);
-    expect(io.stderr).toBeInstanceOf(TeeStream);
+    assert.ok(io.stdout instanceof TeeStream);
+    assert.ok(io.stderr instanceof TeeStream);
 
     // Clean up TeeStreams
     const stdout = io.stdout as TeeStream;
@@ -92,9 +95,9 @@ test('createIOContext logger routes log to stdout and warn/error to stderr', asy
   io.logger.warn('warning');
   io.logger.error('problem');
 
-  expect(stdoutData).toContain('info');
-  expect(stdoutData).not.toContain('warning');
-  expect(stderrData).toContain('warning');
-  expect(stderrData).toContain('problem');
-  expect(stderrData).not.toContain('info');
+  assert.ok(stdoutData.includes('info'));
+  assert.ok(!stdoutData.includes('warning'));
+  assert.ok(stderrData.includes('warning'));
+  assert.ok(stderrData.includes('problem'));
+  assert.ok(!stderrData.includes('info'));
 });

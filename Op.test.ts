@@ -1,13 +1,13 @@
-import { expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import assert from 'node:assert/strict';
+import process from 'node:process';
 import { PassThrough } from 'node:stream';
-import { createIOContext, type IOContext } from './IOContext.ts';
+import { test } from 'node:test';
+import { createDefaultLogger } from './Logger.ts';
 import { FetchUserOp, PrintOp } from './Op.examples.ts';
 import { Op } from './Op.ts';
 import type { OutcomeOf } from './Outcome.ts';
-import { TeeStream } from './TeeStream.ts';
+import { patchConsole, unpatchConsole } from './patchConsole.ts';
+import { SharedContext } from './SharedContext.ts';
 
 test('PrintOp - success case', async () =>
 {
@@ -19,7 +19,7 @@ test('PrintOp - success case', async () =>
   {
     // TypeScript knows outcome.value is string
     const value: string = outcome.value;
-    expect(value).toBe('Hello, world!');
+    assert.strictEqual(value, 'Hello, world!');
   }
   else
   {
@@ -42,8 +42,7 @@ test('PrintOp - ProhibitedWord failure', async () =>
     switch (failure)
     {
       case 'ProhibitedWord':
-        // assertEquals(failure, "ProhibitedWord");
-        expect(failure).toBe('ProhibitedWord');
+        assert.strictEqual(failure, 'ProhibitedWord');
         break;
       case 'MessageTooLong':
         throw new Error('Wrong failure type');
@@ -66,10 +65,8 @@ test('PrintOp - MessageTooLong failure', async () =>
 
   if (!outcome.ok)
   {
-    // assertEquals(outcome.failure, 'MessageTooLong');
-    expect(outcome.failure).toBe('MessageTooLong');
-    // assertEquals(outcome.debugData, `Length: ${longMessage.length}, Max: 100`);
-    expect(outcome.debugData).toBe(`Length: ${longMessage.length}, Max: 100`);
+    assert.strictEqual(outcome.failure, 'MessageTooLong');
+    assert.strictEqual(outcome.debugData, `Length: ${longMessage.length}, Max: 100`);
   }
   else
   {
@@ -91,7 +88,7 @@ test('FetchUserOp - MissingUserId failure', async () =>
       | 'EmailNotFound'
       | 'unknownError' = outcome.failure;
 
-    expect(outcome.failure).toBe('MissingUserId');
+    assert.strictEqual(outcome.failure, 'MissingUserId');
   }
   else
   {
@@ -106,7 +103,7 @@ test('FetchUserOp - InvalidUserId failure', async () =>
 
   if (!outcome.ok)
   {
-    expect(outcome.failure).toBe('InvalidUserId');
+    assert.strictEqual(outcome.failure, 'InvalidUserId');
   }
   else
   {
@@ -123,8 +120,8 @@ test('FetchUserOp - success case', async () =>
   {
     // TypeScript knows the exact shape
     const user: { id: string; name: string; email: string } = outcome.value;
-    expect(user.id).toBe('user123');
-    expect(user.name).toBe('John Doe');
+    assert.strictEqual(user.id, 'user123');
+    assert.strictEqual(user.name, 'John Doe');
   }
   else
   {
@@ -154,9 +151,9 @@ test('OutcomeOf utility type works correctly', () =>
     failure: 'MessageTooLong',
   };
 
-  expect(successOutcome.ok).toBe(true);
-  expect(failureOutcome.ok).toBe(false);
-  expect(anotherFailure.ok).toBe(false);
+  assert.strictEqual(successOutcome.ok, true);
+  assert.strictEqual(failureOutcome.ok, false);
+  assert.strictEqual(anotherFailure.ok, false);
 
   const _invalidFailure: PrintOpOutcome = {
     ok: false,
@@ -185,7 +182,7 @@ class CalculateOp extends Op<
     return `CalculateOp(${this.a}, ${this.b})`;
   }
 
-  async run(_io?: IOContext)
+  async execute()
   {
     await Promise.resolve();
     if (this.a < 0 || this.b < 0)
@@ -210,7 +207,7 @@ class StaticRunFinalOp extends Op<string, 'unknownError'>
 {
   name = 'StaticRunFinalOp';
 
-  async run(_io?: IOContext)
+  async execute()
   {
     await Promise.resolve();
     return this.succeed('terminal result');
@@ -221,33 +218,13 @@ class StaticRunRootOp extends Op<string, 'unknownError'>
 {
   name = 'StaticRunRootOp';
 
-  async run(_io?: IOContext)
+  async execute()
   {
-    await Promise.resolve();
-    return this.replaceWith(new StaticRunFinalOp());
+    // In the new model, ops run children via run() which goes through OpRunner
+    const childOutcome = await new StaticRunFinalOp().run();
+    if (!childOutcome.ok) return this.failWithUnknownError();
+    return this.succeed(childOutcome.value);
   }
-}
-
-class LoggingOp extends Op<string, 'unknownError'>
-{
-  name = 'LoggingOp';
-
-  run(io?: IOContext)
-  {
-    this.log(io, 'hello from logger');
-    this.warn(io, 'warning from logger');
-    this.error(io, 'error from logger');
-    return Promise.resolve(this.succeed('ok'));
-  }
-}
-
-function endTeeStream(stream: TeeStream): Promise<void>
-{
-  return new Promise<void>((resolve, reject) =>
-  {
-    stream.once('error', reject);
-    stream.end(resolve);
-  });
 }
 
 test('CalculateOp - success with complex return type', async () =>
@@ -259,8 +236,8 @@ test('CalculateOp - success with complex return type', async () =>
   {
     // TypeScript knows the exact shape
     const result: { sum: number; product: number } = outcome.value;
-    expect(result.sum).toBe(15);
-    expect(result.product).toBe(50);
+    assert.strictEqual(result.sum, 15);
+    assert.strictEqual(result.product, 50);
   }
   else
   {
@@ -277,7 +254,7 @@ test('CalculateOp - failure cases', async () =>
   {
     // Exhaustive type check
     const failure: 'NegativeInput' | 'InputTooLarge' | 'unknownError' = negativeOutcome.failure;
-    expect(failure).toBe('NegativeInput');
+    assert.strictEqual(failure, 'NegativeInput');
   }
   else
   {
@@ -289,7 +266,7 @@ test('CalculateOp - failure cases', async () =>
 
   if (!largeOutcome.ok)
   {
-    expect(largeOutcome.failure).toBe('InputTooLarge');
+    assert.strictEqual(largeOutcome.failure, 'InputTooLarge');
   }
   else
   {
@@ -297,75 +274,57 @@ test('CalculateOp - failure cases', async () =>
   }
 });
 
-test('Op.run() executes through OpRunner and returns terminal outcome', async () =>
+test('Op.run() static method executes through OpRunner and returns outcome', async () =>
 {
   const outcome = await StaticRunRootOp.run();
 
-  expect(outcome).toEqual({
+  assert.deepStrictEqual(outcome, {
     ok: true,
     value: 'terminal result',
   });
 });
 
-test('Op logger respects IOContext stdout and log file', async () =>
+test('console.log goes through IOContext when patched', () =>
 {
-  const tempDir = await mkdtemp(join(tmpdir(), 'op-logger-'));
-  const logFile = join(tempDir, 'runner.log');
-  const stdoutTerminal = new PassThrough();
-  const stderrTerminal = new PassThrough();
-  let stdoutOutput = '';
-  let stderrOutput = '';
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
 
-  stdoutTerminal.setEncoding('utf8');
-  stderrTerminal.setEncoding('utf8');
-  stdoutTerminal.on('data', (chunk: string) =>
-  {
-    stdoutOutput += chunk;
-  });
-  stderrTerminal.on('data', (chunk: string) =>
-  {
-    stderrOutput += chunk;
-  });
+  const mockStdout = new PassThrough();
+  const mockStderr = new PassThrough();
+  mockStdout.setEncoding('utf8');
+  mockStderr.setEncoding('utf8');
+  mockStdout.on('data', (chunk: string) => stdoutChunks.push(chunk));
+  mockStderr.on('data', (chunk: string) => stderrChunks.push(chunk));
+
+  SharedContext.overrideDefaultIOContext = {
+    stdin: process.stdin,
+    stdout: mockStdout,
+    stderr: mockStderr,
+    mode: 'test' as const,
+    logger: createDefaultLogger(),
+  };
 
   try
   {
-    const io = await createIOContext({
-      mode: 'test',
-      logFile,
-    }, {
-      stdout: stdoutTerminal,
-      stderr: stderrTerminal,
-    });
+    patchConsole();
 
-    const outcome = await new LoggingOp().run(io);
-    expect(outcome).toEqual({
-      ok: true,
-      value: 'ok',
-    });
+    console.log('hello from log');
+    console.warn('hello from warn');
+    console.error('hello from error');
 
-    const stdout = io.stdout;
-    const stderr = io.stderr;
-    if (!(stdout instanceof TeeStream) || !(stderr instanceof TeeStream))
-    {
-      throw new Error('Expected IOContext stdout and stderr to be TeeStreams');
-    }
-
-    await Promise.all([endTeeStream(stdout), endTeeStream(stderr)]);
-
-    const logContents = await readFile(logFile, 'utf8');
-    expect(logContents).toContain('hello from logger');
-    expect(logContents).toContain('warning from logger');
-    expect(logContents).toContain('error from logger');
-    expect(stdoutOutput).toContain('hello from logger');
-    expect(stdoutOutput).not.toContain('warning from logger');
-    expect(stdoutOutput).not.toContain('error from logger');
-    expect(stderrOutput).toContain('warning from logger');
-    expect(stderrOutput).toContain('error from logger');
-    expect(stderrOutput).not.toContain('hello from logger');
+    assert.ok(stdoutChunks.join('').includes('hello from log'));
+    assert.ok(stderrChunks.join('').includes('hello from warn'));
+    assert.ok(stderrChunks.join('').includes('hello from error'));
+    // log should NOT appear in stderr
+    assert.ok(!stderrChunks.join('').includes('hello from log'));
+    // warn/error should NOT appear in stdout
+    assert.ok(!stdoutChunks.join('').includes('hello from warn'));
+    assert.ok(!stdoutChunks.join('').includes('hello from error'));
   }
   finally
   {
-    await rm(tempDir, { recursive: true, force: true });
+    unpatchConsole();
+    SharedContext.overrideDefaultIOContext = null;
   }
 });
 
@@ -376,14 +335,13 @@ test('Type narrowing works correctly', async () =>
 
   // Before narrowing, outcome is a union type
   type _OutcomeType = typeof outcome;
-  // _OutcomeType = Success<string> | Failure<'ProhibitedWord' | 'MessageTooLong' | 'unknownError'>
 
   if (outcome.ok)
   {
     // After narrowing, TypeScript knows it's Success<string>
     type _SuccessType = typeof outcome; // Success<string>
     const value: string = outcome.value;
-    expect(value).toBe('test');
+    assert.strictEqual(value, 'test');
 
     // @ts-expect-error - 'failure' doesn't exist on Success type
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -392,7 +350,7 @@ test('Type narrowing works correctly', async () =>
   else
   {
     // After narrowing, TypeScript knows it's Failure<...>
-    type _FailureType = typeof outcome; // Failure<'ProhibitedWord' | 'MessageTooLong' | 'unknownError'>
+    type _FailureType = typeof outcome;
     const _failure = outcome.failure;
     const _debugData = outcome.debugData;
     // @ts-expect-error - 'value' doesn't exist on Failure type
@@ -401,29 +359,40 @@ test('Type narrowing works correctly', async () =>
   }
 });
 
-test('Op.getIO prefers explicit io over OpRunner.defaultIOContext', async () =>
+test('Op.io returns SharedContext.effectiveIOContext', () =>
 {
-  const customIO = await createIOContext({ mode: 'test' }, {
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
-  });
-
-  class GetIOTestOp extends Op<IOContext, never>
+  class IOAccessOp extends Op<string, never>
   {
-    name = 'GetIOTestOp';
-    async run(io?: IOContext)
+    name = 'IOAccessOp';
+    async execute()
     {
       await Promise.resolve();
-      return this.succeed(this.getIO(io));
+      // Access this.io to prove it works
+      const mode = this.io.mode;
+      return this.succeed(mode);
     }
   }
 
-  const op = new GetIOTestOp();
-  const outcome = await op.run(customIO);
+  const mockStdout = new PassThrough();
+  const mockStderr = new PassThrough();
 
-  if (!outcome.ok) throw new Error('Expected success');
-  expect(outcome.value).toBe(customIO);
-  expect(outcome.value.mode).toBe('test');
+  SharedContext.overrideDefaultIOContext = {
+    stdin: process.stdin,
+    stdout: mockStdout,
+    stderr: mockStderr,
+    mode: 'test' as const,
+    logger: createDefaultLogger(),
+  };
+
+  try
+  {
+    const op = new IOAccessOp();
+    assert.strictEqual(op['io'].mode, 'test');
+  }
+  finally
+  {
+    SharedContext.overrideDefaultIOContext = null;
+  }
 });
 
 test('Op.fail includes debugData when provided', async () =>
@@ -431,7 +400,7 @@ test('Op.fail includes debugData when provided', async () =>
   class FailDebugOp extends Op<never, 'badThing'>
   {
     name = 'FailDebugOp';
-    async run(_io?: IOContext)
+    async execute()
     {
       await Promise.resolve();
       return this.fail('badThing' as const, 'extra info here');
@@ -440,8 +409,8 @@ test('Op.fail includes debugData when provided', async () =>
 
   const outcome = await new FailDebugOp().run();
   if (outcome.ok) throw new Error('Expected failure');
-  expect(outcome.failure).toBe('badThing');
-  expect(outcome.debugData).toBe('extra info here');
+  assert.strictEqual(outcome.failure, 'badThing');
+  assert.strictEqual(outcome.debugData, 'extra info here');
 });
 
 test('Op.failWithUnknownError includes debugData', async () =>
@@ -449,7 +418,7 @@ test('Op.failWithUnknownError includes debugData', async () =>
   class UnknownFailOp extends Op<never, 'unknownError'>
   {
     name = 'UnknownFailOp';
-    async run(_io?: IOContext)
+    async execute()
     {
       await Promise.resolve();
       return this.failWithUnknownError('something went wrong');
@@ -458,8 +427,8 @@ test('Op.failWithUnknownError includes debugData', async () =>
 
   const outcome = await new UnknownFailOp().run();
   if (outcome.ok) throw new Error('Expected failure');
-  expect(outcome.failure).toBe('unknownError');
-  expect(outcome.debugData).toBe('something went wrong');
+  assert.strictEqual(outcome.failure, 'unknownError');
+  assert.strictEqual(outcome.debugData, 'something went wrong');
 });
 
 test('Op.cancel returns standard canceled failure', async () =>
@@ -467,7 +436,7 @@ test('Op.cancel returns standard canceled failure', async () =>
   class CancelOp extends Op<never, 'canceled'>
   {
     name = 'CancelOp';
-    async run(_io?: IOContext)
+    async execute()
     {
       await Promise.resolve();
       return this.cancel();
@@ -475,14 +444,14 @@ test('Op.cancel returns standard canceled failure', async () =>
   }
 
   const outcome = await new CancelOp().run();
-  expect(outcome).toEqual({ ok: false, failure: 'canceled' });
+  assert.deepStrictEqual(outcome, { ok: false, failure: 'canceled' });
 });
 
 test('PrintOp with empty message succeeds', async () =>
 {
   const op = new PrintOp('');
   const outcome = await op.run();
-  expect(outcome).toEqual({ ok: true, value: '' });
+  assert.deepStrictEqual(outcome, { ok: true, value: '' });
 });
 
 test('PrintOp at exactly maxLength succeeds', async () =>
@@ -490,5 +459,5 @@ test('PrintOp at exactly maxLength succeeds', async () =>
   const msg = 'a'.repeat(100);
   const op = new PrintOp(msg, { maxLength: 100 });
   const outcome = await op.run();
-  expect(outcome.ok).toBe(true);
+  assert.strictEqual(outcome.ok, true);
 });

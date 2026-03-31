@@ -1,4 +1,5 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { ExecOp } from './ExecOp.ts';
 
 test('ExecOp succeeds and captures stdout/stderr for non-zero exit codes', async () =>
@@ -9,7 +10,7 @@ test('ExecOp succeeds and captures stdout/stderr for non-zero exit codes', async
     'printf out; printf err 1>&2; exit 7',
   ]).run();
 
-  expect(outcome).toEqual({
+  assert.deepStrictEqual(outcome, {
     ok: true,
     value: {
       exitCode: 7,
@@ -24,7 +25,7 @@ test('ExecOp returns commandNotFound for missing commands', async () =>
 {
   const outcome = await new ExecOp(['definitely-not-a-real-command-xyz']).run();
 
-  expect(outcome).toEqual({
+  assert.deepStrictEqual(outcome, {
     ok: false,
     failure: 'commandNotFound',
     debugData: 'Command not found: definitely-not-a-real-command-xyz',
@@ -37,7 +38,7 @@ test('ExecOp pipes stdinInput to the subprocess', async () =>
     stdinInput: 'hello from stdin',
   }).run();
 
-  expect(outcome).toEqual({
+  assert.deepStrictEqual(outcome, {
     ok: true,
     value: {
       exitCode: 0,
@@ -56,7 +57,7 @@ test('ExecOp preserves signal termination details', async () =>
     "process.kill(process.pid, 'SIGTERM')",
   ]).run();
 
-  expect(outcome).toEqual({
+  assert.deepStrictEqual(outcome, {
     ok: true,
     value: {
       exitCode: null,
@@ -73,7 +74,7 @@ test('ExecOp ignores EPIPE when a spawned command exits before consuming large s
     stdinInput: 'x'.repeat(10_000_000),
   }).run();
 
-  expect(outcome).toEqual({
+  assert.deepStrictEqual(outcome, {
     ok: true,
     value: {
       exitCode: 0,

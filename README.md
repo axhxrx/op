@@ -58,6 +58,22 @@ MIT
 
 ## Happenings
 
+### improved 1.x.x versions
+
+Bite the bullet, and fix the underlying design (accepting breaking changes necessitated by this).
+
+The stack-based `OpRunner` is convenient, standardizes the most common `Op` execution model, and reduces how much thinking needs to be done (by human or bot) when composing ops into larger functionality. But, since its introduction, it had tension with the simpler `myOp.run()` (or the static equivalent). Mixing and matching direct invocation of ops with delegation of op execution to `OpRunner` was error-prone, with non-obvious pitfalls.
+
+With 1.0.0, the design was changed. The `OpRunner` class is now more constrained — there should be only one instance, now; we accept a little more funky constraints around `OpRunner` in exchange for unification of the Op execution model. All `Op` instances now execute via _the_ `OpRunner` (no longer "_an_ `OpRunner`"). To make this happen, we extended `OpRunner` in 0.9.3 to be able to run operations "out of band" on a different stack than the main one, and then return control.
+
+However, that made it obvious that really fixing the the problem all the way required a backwards incompatible redesign (hence 1.x). We simplified the outcome type by removing the control flow variants (which were a dumb idea in the first place), and separating `run()` from `execute()` (invocation vs implementation).
+
+The net effect is more simplicity at the point of use, and the elimination of the tension between the two op execution models that didn't work well in tandem.
+
+- 2026-03-31 💥 1.0.0 — introduce new hopefully-better execution model, to make direct op invocation and stack-based invocation stop fighting
+
+### old 0.x.x versions
+
 - 2026-03-25 📦 0.9.3 — improve package metadata and remove superfluous items from built package
 
 - 2026-03-25 📦 0.9.2 — improve docs and publishing automation

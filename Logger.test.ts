@@ -1,4 +1,5 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { createDefaultLogger, Logger } from './Logger.ts';
 
 test('Logger.log/warn/error call the correct writers', () =>
@@ -14,7 +15,7 @@ test('Logger.log/warn/error call the correct writers', () =>
   logger.warn('warn message');
   logger.error('error message');
 
-  expect(calls).toEqual([
+  assert.deepStrictEqual(calls, [
     { level: 'log', message: 'info message' },
     { level: 'warn', message: 'warn message' },
     { level: 'error', message: 'error message' },
@@ -30,7 +31,7 @@ test('Logger with namespace adds prefix', () =>
   });
 
   logger.log('hello');
-  expect(messages).toEqual(['[MyApp] hello']);
+  assert.deepStrictEqual(messages, ['[MyApp] hello']);
 });
 
 test('Logger without namespace has no prefix', () =>
@@ -41,7 +42,7 @@ test('Logger without namespace has no prefix', () =>
   });
 
   logger.log('hello');
-  expect(messages).toEqual(['hello']);
+  assert.deepStrictEqual(messages, ['hello']);
 });
 
 test('Logger.child creates hierarchical namespace', () =>
@@ -56,7 +57,7 @@ test('Logger.child creates hierarchical namespace', () =>
   parent.log('starting');
   child.log('connected');
 
-  expect(messages).toEqual([
+  assert.deepStrictEqual(messages, [
     '[App] starting',
     '[App:Database] connected',
   ]);
@@ -71,7 +72,7 @@ test('Logger.child from root uses sub-namespace directly', () =>
   const child = root.child('Sub');
 
   child.log('test');
-  expect(messages).toEqual(['[Sub] test']);
+  assert.deepStrictEqual(messages, ['[Sub] test']);
 });
 
 test('Logger.child inherits writers', () =>
@@ -84,7 +85,7 @@ test('Logger.child inherits writers', () =>
   const child = parent.child('Child');
 
   child.warn('oops');
-  expect(warns).toEqual(['[Parent:Child] oops']);
+  assert.deepStrictEqual(warns, ['[Parent:Child] oops']);
 });
 
 test('Logger.getNamespace returns the namespace', () =>
@@ -92,13 +93,13 @@ test('Logger.getNamespace returns the namespace', () =>
   const withNs = new Logger({ namespace: 'Test' });
   const withoutNs = new Logger({});
 
-  expect(withNs.getNamespace()).toBe('Test');
-  expect(withoutNs.getNamespace()).toBeUndefined();
+  assert.strictEqual(withNs.getNamespace(), 'Test');
+  assert.strictEqual(withoutNs.getNamespace(), undefined);
 });
 
 test('createDefaultLogger returns a Logger with no namespace', () =>
 {
   const logger = createDefaultLogger();
-  expect(logger).toBeInstanceOf(Logger);
-  expect(logger.getNamespace()).toBeUndefined();
+  assert.ok(logger instanceof Logger);
+  assert.strictEqual(logger.getNamespace(), undefined);
 });

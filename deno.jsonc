@@ -1,8 +1,11 @@
 {
   "name": "@axhxrx/op",
-  "version": "0.9.3",
+  "version": "1.0.0",
   "exports": "./mod.ts",
   "license": "MIT",
+  "tasks": {
+    "check": "bun test && node --test *.test.ts && deno test -A && bunx tsc --noEmit && deno check mod.ts && deno lint && dprint fmt"
+  },
   "compilerOptions": {
     "noUncheckedIndexedAccess": true
   },
@@ -16,7 +19,6 @@
     "dprint.jsonc",
     "node_modules",
     "tsconfig.json",
-    "**/*.test.ts",
     "*.examples.ts"
   ]
 }
