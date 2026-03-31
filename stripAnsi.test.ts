@@ -1,38 +1,39 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { hasAnsi, stripAnsi, stripAnsiFromLines } from './stripAnsi.ts';
 
 test('stripAnsi removes color codes', () =>
 {
   const colored = '\u001b[31mRed text\u001b[0m';
   const clean = stripAnsi(colored);
-  expect(clean).toBe('Red text');
+  assert.strictEqual(clean, 'Red text');
 });
 
 test('stripAnsi removes bold/italic formatting', () =>
 {
   const formatted = '\u001b[1mBold\u001b[0m \u001b[3mItalic\u001b[0m';
   const clean = stripAnsi(formatted);
-  expect(clean).toBe('Bold Italic');
+  assert.strictEqual(clean, 'Bold Italic');
 });
 
 test('stripAnsi removes cursor movement codes', () =>
 {
   const withCursor = 'Text\u001b[2AMore text';
   const clean = stripAnsi(withCursor);
-  expect(clean).toBe('TextMore text');
+  assert.strictEqual(clean, 'TextMore text');
 });
 
 test('stripAnsi handles text with no ANSI codes', () =>
 {
   const plain = 'Just plain text';
   const clean = stripAnsi(plain);
-  expect(clean).toBe('Just plain text');
+  assert.strictEqual(clean, 'Just plain text');
 });
 
 test('stripAnsi handles empty string', () =>
 {
   const clean = stripAnsi('');
-  expect(clean).toBe('');
+  assert.strictEqual(clean, '');
 });
 
 test('stripAnsi handles complex terminal output', () =>
@@ -40,7 +41,7 @@ test('stripAnsi handles complex terminal output', () =>
   // Terminal output with cursor and colors
   const terminalOutput = '\u001b[36m❯\u001b[39m Option 1\n  Option 2\n  Option 3';
   const clean = stripAnsi(terminalOutput);
-  expect(clean).toBe('❯ Option 1\n  Option 2\n  Option 3');
+  assert.strictEqual(clean, '❯ Option 1\n  Option 2\n  Option 3');
 });
 
 test('stripAnsiFromLines processes multiple lines', () =>
@@ -51,7 +52,7 @@ test('stripAnsiFromLines processes multiple lines', () =>
     'Plain line 3',
   ];
   const clean = stripAnsiFromLines(lines);
-  expect(clean).toEqual([
+  assert.deepStrictEqual(clean, [
     'Line 1',
     'Line 2',
     'Plain line 3',
@@ -60,27 +61,27 @@ test('stripAnsiFromLines processes multiple lines', () =>
 
 test('hasAnsi detects ANSI codes', () =>
 {
-  expect(hasAnsi('\u001b[31mRed\u001b[0m')).toBe(true);
-  expect(hasAnsi('Plain text')).toBe(false);
-  expect(hasAnsi('')).toBe(false);
-  expect(hasAnsi('\u001b[2AUp')).toBe(true);
+  assert.strictEqual(hasAnsi('\u001b[31mRed\u001b[0m'), true);
+  assert.strictEqual(hasAnsi('Plain text'), false);
+  assert.strictEqual(hasAnsi(''), false);
+  assert.strictEqual(hasAnsi('\u001b[2AUp'), true);
 });
 
 test('stripAnsi preserves emoji and unicode', () =>
 {
   const withEmoji = '\u001b[31m🎉 Success!\u001b[0m 👍';
   const clean = stripAnsi(withEmoji);
-  expect(clean).toBe('🎉 Success! 👍');
+  assert.strictEqual(clean, '🎉 Success! 👍');
 });
 
 test('stripAnsi removes cursor show/hide (private CSI with ? prefix)', () =>
 {
   const showCursor = '\x1b[?25h';
   const hideCursor = '\x1b[?25l';
-  expect(stripAnsi(`before${hideCursor}after`)).toBe('beforeafter');
-  expect(stripAnsi(`before${showCursor}after`)).toBe('beforeafter');
-  expect(hasAnsi(showCursor)).toBe(true);
-  expect(hasAnsi(hideCursor)).toBe(true);
+  assert.strictEqual(stripAnsi(`before${hideCursor}after`), 'beforeafter');
+  assert.strictEqual(stripAnsi(`before${showCursor}after`), 'beforeafter');
+  assert.strictEqual(hasAnsi(showCursor), true);
+  assert.strictEqual(hasAnsi(hideCursor), true);
 });
 
 test('stripAnsi removes alternate screen and bracketed paste sequences', () =>
@@ -90,5 +91,5 @@ test('stripAnsi removes alternate screen and bracketed paste sequences', () =>
   const bracketedPasteOn = '\x1b[?2004h';
   const bracketedPasteOff = '\x1b[?2004l';
   const input = `${altScreenOn}content${bracketedPasteOn}pasted${bracketedPasteOff}more${altScreenOff}`;
-  expect(stripAnsi(input)).toBe('contentpastedmore');
+  assert.strictEqual(stripAnsi(input), 'contentpastedmore');
 });
