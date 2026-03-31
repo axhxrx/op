@@ -1,4 +1,5 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { Op } from './Op.ts';
 import {
   isFailure,
@@ -8,54 +9,54 @@ import {
 
 test('isSuccess returns true for valid Success', () =>
 {
-  expect(isSuccess({ ok: true, value: 'hello' })).toBe(true);
-  expect(isSuccess({ ok: true, value: null })).toBe(true);
-  expect(isSuccess({ ok: true, value: undefined })).toBe(true);
-  expect(isSuccess({ ok: true, value: 0 })).toBe(true);
+  assert.strictEqual(isSuccess({ ok: true, value: 'hello' }), true);
+  assert.strictEqual(isSuccess({ ok: true, value: null }), true);
+  assert.strictEqual(isSuccess({ ok: true, value: undefined }), true);
+  assert.strictEqual(isSuccess({ ok: true, value: 0 }), true);
 });
 
 test('isSuccess returns false for non-Success values', () =>
 {
-  expect(isSuccess({ ok: false, failure: 'err' })).toBe(false);
-  expect(isSuccess({ ok: true })).toBe(false); // missing 'value' key
-  expect(isSuccess({ ok: 'true', value: 1 })).toBe(false); // ok is string
-  expect(isSuccess(null)).toBe(false);
-  expect(isSuccess(undefined)).toBe(false);
-  expect(isSuccess('string')).toBe(false);
-  expect(isSuccess(42)).toBe(false);
-  expect(isSuccess({})).toBe(false);
+  assert.strictEqual(isSuccess({ ok: false, failure: 'err' }), false);
+  assert.strictEqual(isSuccess({ ok: true }), false); // missing 'value' key
+  assert.strictEqual(isSuccess({ ok: 'true', value: 1 }), false); // ok is string
+  assert.strictEqual(isSuccess(null), false);
+  assert.strictEqual(isSuccess(undefined), false);
+  assert.strictEqual(isSuccess('string'), false);
+  assert.strictEqual(isSuccess(42), false);
+  assert.strictEqual(isSuccess({}), false);
 });
 
 test('isFailure returns true for valid Failure', () =>
 {
-  expect(isFailure({ ok: false, failure: 'err' })).toBe(true);
-  expect(isFailure({ ok: false, failure: 'err', debugData: 'info' })).toBe(true);
-  expect(isFailure({ ok: false, failure: null })).toBe(true);
+  assert.strictEqual(isFailure({ ok: false, failure: 'err' }), true);
+  assert.strictEqual(isFailure({ ok: false, failure: 'err', debugData: 'info' }), true);
+  assert.strictEqual(isFailure({ ok: false, failure: null }), true);
 });
 
 test('isFailure returns false for non-Failure values', () =>
 {
-  expect(isFailure({ ok: true, value: 'hello' })).toBe(false);
-  expect(isFailure({ ok: false })).toBe(false); // missing 'failure' key
-  expect(isFailure({ ok: 'false', failure: 'x' })).toBe(false); // ok is string
-  expect(isFailure(null)).toBe(false);
-  expect(isFailure(undefined)).toBe(false);
-  expect(isFailure({})).toBe(false);
+  assert.strictEqual(isFailure({ ok: true, value: 'hello' }), false);
+  assert.strictEqual(isFailure({ ok: false }), false); // missing 'failure' key
+  assert.strictEqual(isFailure({ ok: 'false', failure: 'x' }), false); // ok is string
+  assert.strictEqual(isFailure(null), false);
+  assert.strictEqual(isFailure(undefined), false);
+  assert.strictEqual(isFailure({}), false);
 });
 
 test('isOutcome returns true for both Success and Failure', () =>
 {
-  expect(isOutcome({ ok: true, value: 'hello' })).toBe(true);
-  expect(isOutcome({ ok: false, failure: 'err' })).toBe(true);
+  assert.strictEqual(isOutcome({ ok: true, value: 'hello' }), true);
+  assert.strictEqual(isOutcome({ ok: false, failure: 'err' }), true);
 });
 
 test('isOutcome returns false for non-Outcome values', () =>
 {
-  expect(isOutcome(null)).toBe(false);
-  expect(isOutcome(undefined)).toBe(false);
-  expect(isOutcome({})).toBe(false);
-  expect(isOutcome({ ok: true })).toBe(false); // missing value
-  expect(isOutcome({ ok: false })).toBe(false); // missing failure
+  assert.strictEqual(isOutcome(null), false);
+  assert.strictEqual(isOutcome(undefined), false);
+  assert.strictEqual(isOutcome({}), false);
+  assert.strictEqual(isOutcome({ ok: true }), false); // missing value
+  assert.strictEqual(isOutcome({ ok: false }), false); // missing failure
 });
 
 class DummyOp extends Op<string, 'fail'>
@@ -72,6 +73,6 @@ test('DummyOp returns valid outcome', async () =>
 {
   const op = new DummyOp();
   const outcome = await op.run();
-  expect(isSuccess(outcome)).toBe(true);
-  expect(outcome).toEqual({ ok: true, value: 'ok' });
+  assert.strictEqual(isSuccess(outcome), true);
+  assert.deepStrictEqual(outcome, { ok: true, value: 'ok' });
 });

@@ -1,5 +1,6 @@
-import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { test } from 'node:test';
 import { createDefaultLogger } from './Logger.ts';
 import { isConsolePatched, patchConsole, unpatchConsole } from './patchConsole.ts';
 import { SharedContext } from './SharedContext.ts';
@@ -36,7 +37,7 @@ test('patchConsole routes console.log to IOContext stdout', () =>
   {
     patchConsole();
     console.log('hello world');
-    expect(stdoutChunks.join('')).toBe('hello world\n');
+    assert.strictEqual(stdoutChunks.join(''), 'hello world\n');
   }
   finally
   {
@@ -53,7 +54,7 @@ test('patchConsole routes console.warn to IOContext stderr', () =>
   {
     patchConsole();
     console.warn('warning!');
-    expect(stderrChunks.join('')).toBe('warning!\n');
+    assert.strictEqual(stderrChunks.join(''), 'warning!\n');
   }
   finally
   {
@@ -70,7 +71,7 @@ test('patchConsole routes console.error to IOContext stderr', () =>
   {
     patchConsole();
     console.error('error!');
-    expect(stderrChunks.join('')).toBe('error!\n');
+    assert.strictEqual(stderrChunks.join(''), 'error!\n');
   }
   finally
   {
@@ -87,7 +88,7 @@ test('patchConsole supports util.format-style formatting', () =>
   {
     patchConsole();
     console.log('count: %d, name: %s', 42, 'test');
-    expect(stdoutChunks.join('')).toBe('count: 42, name: test\n');
+    assert.strictEqual(stdoutChunks.join(''), 'count: 42, name: test\n');
   }
   finally
   {
@@ -104,7 +105,7 @@ test('patchConsole handles multiple arguments', () =>
   {
     patchConsole();
     console.log('a', 'b', 'c');
-    expect(stdoutChunks.join('')).toBe('a b c\n');
+    assert.strictEqual(stdoutChunks.join(''), 'a b c\n');
   }
   finally
   {
@@ -117,9 +118,9 @@ test('unpatchConsole restores original console methods', () =>
 {
   const originalLog = console.log;
   patchConsole();
-  expect(console.log).not.toBe(originalLog);
+  assert.notStrictEqual(console.log, originalLog);
   unpatchConsole();
-  expect(console.log).toBe(originalLog);
+  assert.strictEqual(console.log, originalLog);
 });
 
 test('patchConsole is idempotent', () =>
@@ -131,9 +132,9 @@ test('patchConsole is idempotent', () =>
     patchConsole();
     patchConsole(); // second call should be a no-op
     console.log('once');
-    expect(stdoutChunks.join('')).toBe('once\n');
+    assert.strictEqual(stdoutChunks.join(''), 'once\n');
     unpatchConsole();
-    expect(isConsolePatched()).toBe(false);
+    assert.strictEqual(isConsolePatched(), false);
   }
   finally
   {
@@ -144,11 +145,11 @@ test('patchConsole is idempotent', () =>
 
 test('isConsolePatched reflects current state', () =>
 {
-  expect(isConsolePatched()).toBe(false);
+  assert.strictEqual(isConsolePatched(), false);
   patchConsole();
-  expect(isConsolePatched()).toBe(true);
+  assert.strictEqual(isConsolePatched(), true);
   unpatchConsole();
-  expect(isConsolePatched()).toBe(false);
+  assert.strictEqual(isConsolePatched(), false);
 });
 
 test('console.info behaves like console.log when patched', () =>
@@ -159,7 +160,7 @@ test('console.info behaves like console.log when patched', () =>
   {
     patchConsole();
     console.info('info message');
-    expect(stdoutChunks.join('')).toBe('info message\n');
+    assert.strictEqual(stdoutChunks.join(''), 'info message\n');
   }
   finally
   {
@@ -176,7 +177,7 @@ test('console.debug behaves like console.log when patched', () =>
   {
     patchConsole();
     console.debug('debug message');
-    expect(stdoutChunks.join('')).toBe('debug message\n');
+    assert.strictEqual(stdoutChunks.join(''), 'debug message\n');
   }
   finally
   {
