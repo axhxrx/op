@@ -1,15 +1,7 @@
 import assert from 'node:assert/strict';
-import process from 'node:process';
-import { describe, test } from 'node:test';
+import { test } from 'node:test';
 import { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
-import type { Outcome } from './Outcome.ts';
-
-/**
- Debug flag for verbose logging
- Set DEBUG_OPRUNNER=true to enable detailed test output
- */
-const DEBUG = process.env.DEBUG_OPRUNNER === 'true';
 
 // =============================================================================
 // TEST OPS
@@ -182,264 +174,249 @@ class RoutingOp extends Op<string, string>
 // BASIC EXECUTION TESTS
 // =============================================================================
 
-describe('Basic Execution', () =>
+test('Single op succeeds', async () =>
 {
-  test('Single op succeeds', async () =>
-  {
-    const op = new SimpleOp('SingleOp', 'done');
-    const runner = await OpRunner.create(op, { mode: 'test' });
-    const outcome = await runner.run();
+  const op = new SimpleOp('SingleOp', 'done');
+  const runner = await OpRunner.create(op, { mode: 'test' });
+  const outcome = await runner.run();
 
-    assert.deepStrictEqual(outcome, { ok: true, value: 'done' });
+  assert.deepStrictEqual(outcome, { ok: true, value: 'done' });
+});
+
+test('Single op fails', async () =>
+{
+  const op = new FailingOp('FailingOp', 'error occurred');
+  const runner = await OpRunner.create(op, { mode: 'test' });
+  const outcome = await runner.run();
+
+  assert.deepStrictEqual(outcome, { ok: false, failure: 'error occurred', debugData: undefined });
+});
+
+test('run() returns the terminal outcome', async () =>
+{
+  const op = new SimpleOp('ResultOp', 'terminal result');
+  const runner = await OpRunner.create(op, { mode: 'test' });
+  const outcome = await runner.run();
+
+  assert.deepStrictEqual(outcome, {
+    ok: true,
+    value: 'terminal result',
   });
+});
 
-  test('Single op fails', async () =>
-  {
-    const op = new FailingOp('FailingOp', 'error occurred');
-    const runner = await OpRunner.create(op, { mode: 'test' });
-    const outcome = await runner.run();
+test('runStep returns false on empty stack', async () =>
+{
+  const op = new SimpleOp('Op', 'done');
+  const runner = await OpRunner.create(op, { mode: 'test' });
 
-    assert.deepStrictEqual(outcome, { ok: false, failure: 'error occurred', debugData: undefined });
-  });
+  // Run to completion
+  await runner.run();
 
-  test('run() returns the terminal outcome', async () =>
-  {
-    const op = new SimpleOp('ResultOp', 'terminal result');
-    const runner = await OpRunner.create(op, { mode: 'test' });
-    const outcome = await runner.run();
-
-    assert.deepStrictEqual(outcome, {
-      ok: true,
-      value: 'terminal result',
-    });
-  });
-
-  test('runStep returns false on empty stack', async () =>
-  {
-    const op = new SimpleOp('Op', 'done');
-    const runner = await OpRunner.create(op, { mode: 'test' });
-
-    // Run to completion
-    await runner.run();
-
-    // Now stack is empty, runStep should return false
-    assert.strictEqual(await runner.runStep(), false);
-  });
+  // Now stack is empty, runStep should return false
+  assert.strictEqual(await runner.runStep(), false);
 });
 
 // =============================================================================
 // CHILD OP EXECUTION (replaces handleOutcome tests)
 // =============================================================================
 
-describe('Child Op Execution', () =>
+test('Parent runs child op and gets its outcome', async () =>
 {
-  test('Parent runs child op and gets its outcome', async () =>
-  {
-    const child = new SimpleOp('Child', 'child-result');
-    const parent = new ParentWithChildOp(child);
+  const child = new SimpleOp('Child', 'child-result');
+  const parent = new ParentWithChildOp(child);
 
-    const runner = await OpRunner.create(parent, { mode: 'test' });
-    const outcome = await runner.run();
+  const runner = await OpRunner.create(parent, { mode: 'test' });
+  const outcome = await runner.run();
 
-    assert.deepStrictEqual(outcome, {
-      ok: true,
-      value: 'parent-got-child-result',
-    });
+  assert.deepStrictEqual(outcome, {
+    ok: true,
+    value: 'parent-got-child-result',
   });
+});
 
-  test('Parent handles child failure', async () =>
-  {
-    const child = new FailingOp('Child', 'child error');
-    const parent = new ParentWithChildOp(child);
+test('Parent handles child failure', async () =>
+{
+  const child = new FailingOp('Child', 'child error');
+  const parent = new ParentWithChildOp(child);
 
-    const runner = await OpRunner.create(parent, { mode: 'test' });
-    const outcome = await runner.run();
+  const runner = await OpRunner.create(parent, { mode: 'test' });
+  const outcome = await runner.run();
 
-    assert.deepStrictEqual(outcome, {
-      ok: false,
-      failure: 'child-failed: child error',
-      debugData: undefined,
-    });
+  assert.deepStrictEqual(outcome, {
+    ok: false,
+    failure: 'child-failed: child error',
+    debugData: undefined,
   });
+});
 
-  test('Sequential children all execute', async () =>
-  {
-    const children = [
-      new SimpleOp('Child1', 'one'),
-      new SimpleOp('Child2', 'two'),
-      new SimpleOp('Child3', 'three'),
-    ];
+test('Sequential children all execute', async () =>
+{
+  const children = [
+    new SimpleOp('Child1', 'one'),
+    new SimpleOp('Child2', 'two'),
+    new SimpleOp('Child3', 'three'),
+  ];
 
-    const parent = new SequentialChildrenOp(children);
-    const runner = await OpRunner.create(parent, { mode: 'test' });
-    const outcome = await runner.run();
+  const parent = new SequentialChildrenOp(children);
+  const runner = await OpRunner.create(parent, { mode: 'test' });
+  const outcome = await runner.run();
 
-    assert.deepStrictEqual(outcome, {
-      ok: true,
-      value: ['one', 'two', 'three'],
-    });
+  assert.deepStrictEqual(outcome, {
+    ok: true,
+    value: ['one', 'two', 'three'],
   });
+});
 
-  test('Sequential children stop on failure', async () =>
-  {
-    const children = [
-      new SimpleOp('Child1', 'one'),
-      new FailingOp('Child2', 'boom'),
-      new SimpleOp('Child3', 'three'), // should not execute
-    ];
+test('Sequential children stop on failure', async () =>
+{
+  const children = [
+    new SimpleOp('Child1', 'one'),
+    new FailingOp('Child2', 'boom'),
+    new SimpleOp('Child3', 'three'), // should not execute
+  ];
 
-    const parent = new SequentialChildrenOp(children);
-    const runner = await OpRunner.create(parent, { mode: 'test' });
-    const outcome = await runner.run();
+  const parent = new SequentialChildrenOp(children);
+  const runner = await OpRunner.create(parent, { mode: 'test' });
+  const outcome = await runner.run();
 
-    assert.deepStrictEqual(outcome, {
-      ok: false,
-      failure: 'child-failed: boom',
-      debugData: undefined,
-    });
+  assert.deepStrictEqual(outcome, {
+    ok: false,
+    failure: 'child-failed: boom',
+    debugData: undefined,
   });
+});
 
-  test('Looping op executes N iterations', async () =>
-  {
-    const op = new LoopingOp(5);
-    const runner = await OpRunner.create(op, { mode: 'test' });
-    const outcome = await runner.run();
+test('Looping op executes N iterations', async () =>
+{
+  const op = new LoopingOp(5);
+  const runner = await OpRunner.create(op, { mode: 'test' });
+  const outcome = await runner.run();
 
-    assert.deepStrictEqual(outcome, { ok: true, value: 5 });
-  });
+  assert.deepStrictEqual(outcome, { ok: true, value: 5 });
+});
 
-  test('Routing op branches on child outcome', async () =>
-  {
-    const opA = new RoutingOp('A');
-    const runnerA = await OpRunner.create(opA, { mode: 'test' });
-    const outcomeA = await runnerA.run();
-    assert.deepStrictEqual(outcomeA, { ok: true, value: 'routed-to-A: result-A' });
+test('Routing op branches on child outcome', async () =>
+{
+  const opA = new RoutingOp('A');
+  const runnerA = await OpRunner.create(opA, { mode: 'test' });
+  const outcomeA = await runnerA.run();
+  assert.deepStrictEqual(outcomeA, { ok: true, value: 'routed-to-A: result-A' });
 
-    const opB = new RoutingOp('B');
-    const runnerB = await OpRunner.create(opB, { mode: 'test' });
-    const outcomeB = await runnerB.run();
-    assert.deepStrictEqual(outcomeB, { ok: true, value: 'routed-to-B: result-B' });
+  const opB = new RoutingOp('B');
+  const runnerB = await OpRunner.create(opB, { mode: 'test' });
+  const outcomeB = await runnerB.run();
+  assert.deepStrictEqual(outcomeB, { ok: true, value: 'routed-to-B: result-B' });
 
-    const opC = new RoutingOp('C');
-    const runnerC = await OpRunner.create(opC, { mode: 'test' });
-    const outcomeC = await runnerC.run();
-    assert.deepStrictEqual(outcomeC, { ok: true, value: 'no-route: C' });
-  });
+  const opC = new RoutingOp('C');
+  const runnerC = await OpRunner.create(opC, { mode: 'test' });
+  const outcomeC = await runnerC.run();
+  assert.deepStrictEqual(outcomeC, { ok: true, value: 'no-route: C' });
 });
 
 // =============================================================================
 // DEEP NESTING (via direct invocation)
 // =============================================================================
 
-describe('Deep Nesting', () =>
+test('2-level nesting: parent → child → grandchild', async () =>
 {
-  test('2-level nesting: parent → child → grandchild', async () =>
-  {
-    const grandchild = new SimpleOp('Grandchild', 'gc-result');
-    const child = new ParentWithChildOp(grandchild);
-    child.name = 'Child';
-    const parent = new ParentWithChildOp(child);
+  const grandchild = new SimpleOp('Grandchild', 'gc-result');
+  const child = new ParentWithChildOp(grandchild);
+  child.name = 'Child';
+  const parent = new ParentWithChildOp(child);
 
-    const runner = await OpRunner.create(parent, { mode: 'test' });
-    const outcome = await runner.run();
+  const runner = await OpRunner.create(parent, { mode: 'test' });
+  const outcome = await runner.run();
 
-    assert.deepStrictEqual(outcome, {
-      ok: true,
-      value: 'parent-got-parent-got-gc-result',
-    });
+  assert.deepStrictEqual(outcome, {
+    ok: true,
+    value: 'parent-got-parent-got-gc-result',
   });
+});
 
-  test('Deep nesting (10 levels)', async () =>
+test('Deep nesting (10 levels)', async () =>
+{
+  let current: Op<unknown, unknown> = new SimpleOp('Leaf', 'leaf-value');
+
+  for (let i = 9; i >= 0; i--)
   {
-    let current: Op<unknown, unknown> = new SimpleOp('Leaf', 'leaf-value');
+    const parent = new ParentWithChildOp(current);
+    parent.name = `Level${i}`;
+    current = parent;
+  }
 
-    for (let i = 9; i >= 0; i--)
-    {
-      const parent = new ParentWithChildOp(current);
-      parent.name = `Level${i}`;
-      current = parent;
-    }
+  const runner = await OpRunner.create(current, { mode: 'test' });
+  const outcome = await runner.run();
 
-    const runner = await OpRunner.create(current, { mode: 'test' });
-    const outcome = await runner.run();
-
-    assert.strictEqual(outcome.ok, true);
-    // The value should have "parent-got-" prepended 10 times
-    if (outcome.ok)
-    {
-      assert.strictEqual(outcome.value, 'parent-got-'.repeat(10) + 'leaf-value');
-    }
-  });
+  assert.strictEqual(outcome.ok, true);
+  // The value should have "parent-got-" prepended 10 times
+  if (outcome.ok)
+  {
+    assert.strictEqual(outcome.value, 'parent-got-'.repeat(10) + 'leaf-value');
+  }
 });
 
 // =============================================================================
 // STACK STATE
 // =============================================================================
 
-describe('Stack State', () =>
+test('Empty stack after completion', async () =>
 {
-  test('Empty stack after completion', async () =>
-  {
-    const op = new SimpleOp('Op', 'done');
-    const runner = await OpRunner.create(op, { mode: 'test' });
-    await runner.run();
+  const op = new SimpleOp('Op', 'done');
+  const runner = await OpRunner.create(op, { mode: 'test' });
+  await runner.run();
 
-    assert.strictEqual(runner.getStackDepth(), 0);
-    assert.deepStrictEqual(runner.getStackSnapshot(), []);
-  });
+  assert.strictEqual(runner.getStackDepth(), 0);
+  assert.deepStrictEqual(runner.getStackSnapshot(), []);
+});
 
-  test('Stack has one item before execution', async () =>
-  {
-    const op = new SimpleOp('Op', 'done');
-    const runner = await OpRunner.create(op, { mode: 'test' });
+test('Stack has one item before execution', async () =>
+{
+  const op = new SimpleOp('Op', 'done');
+  const runner = await OpRunner.create(op, { mode: 'test' });
 
-    assert.strictEqual(runner.getStackDepth(), 1);
-    assert.deepStrictEqual(runner.getStackSnapshot(), ['Op']);
-  });
+  assert.strictEqual(runner.getStackDepth(), 1);
+  assert.deepStrictEqual(runner.getStackSnapshot(), ['Op']);
+});
 
-  test('OpRunner.defaultIOContext is set after create()', async () =>
-  {
-    const op = new SimpleOp('Op', 'done');
-    await OpRunner.create(op, { mode: 'test' });
+test('OpRunner.defaultIOContext is set after create()', async () =>
+{
+  const op = new SimpleOp('Op', 'done');
+  await OpRunner.create(op, { mode: 'test' });
 
-    const io = OpRunner.defaultIOContext;
-    assert.notStrictEqual(io, undefined);
-    assert.strictEqual(io!.mode, 'test');
-  });
+  const io = OpRunner.defaultIOContext;
+  assert.notStrictEqual(io, undefined);
+  assert.strictEqual(io!.mode, 'test');
 });
 
 // =============================================================================
 // EDGE CASES
 // =============================================================================
 
-describe('Edge Cases', () =>
+test('Op returning invalid result throws', async () =>
 {
-  test('Op returning invalid result throws', async () =>
+  const badOp = new SimpleOp('BadOp', 'ignored');
+  // Override execute to return garbage
+  badOp.execute = () => Promise.resolve('not a valid result' as never);
+
+  const runner = await OpRunner.create(badOp, { mode: 'test' });
+  await assert.rejects(runner.run(), /returned an invalid result/);
+});
+
+test('Op that runs many children does not blow stack', async () =>
+{
+  // 100 sequential children via direct invocation
+  const children = Array.from(
+    { length: 100 },
+    (_, i) => new SimpleOp(`Child${i}`, i),
+  );
+
+  const parent = new SequentialChildrenOp(children);
+  const runner = await OpRunner.create(parent, { mode: 'test' });
+  const outcome = await runner.run();
+
+  assert.strictEqual(outcome.ok, true);
+  if (outcome.ok)
   {
-    const badOp = new SimpleOp('BadOp', 'ignored');
-    // Override execute to return garbage
-    badOp.execute = () => Promise.resolve('not a valid result' as never);
-
-    const runner = await OpRunner.create(badOp, { mode: 'test' });
-    await assert.rejects(runner.run(), /returned an invalid result/);
-  });
-
-  test('Op that runs many children does not blow stack', async () =>
-  {
-    // 100 sequential children via direct invocation
-    const children = Array.from(
-      { length: 100 },
-      (_, i) => new SimpleOp(`Child${i}`, i),
-    );
-
-    const parent = new SequentialChildrenOp(children);
-    const runner = await OpRunner.create(parent, { mode: 'test' });
-    const outcome = await runner.run();
-
-    assert.strictEqual(outcome.ok, true);
-    if (outcome.ok)
-    {
-      assert.strictEqual(outcome.value.length, 100);
-    }
-  });
+    assert.strictEqual(outcome.value.length, 100);
+  }
 });

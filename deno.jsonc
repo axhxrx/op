@@ -4,7 +4,7 @@
   "exports": "./mod.ts",
   "license": "MIT",
   "tasks": {
-    "check": "bun test && bunx tsc --noEmit && deno check mod.ts && deno lint && dprint fmt"
+    "check": "bun test && node --test *.test.ts && deno test -A && bunx tsc --noEmit && deno check mod.ts && deno lint && dprint fmt"
   },
   "compilerOptions": {
     "noUncheckedIndexedAccess": true
@@ -19,7 +19,6 @@
     "dprint.jsonc",
     "node_modules",
     "tsconfig.json",
-    "**/*.test.ts",
     "*.examples.ts"
   ]
 }

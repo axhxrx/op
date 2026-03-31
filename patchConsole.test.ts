@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import process from 'node:process';
 import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
 import { createDefaultLogger } from './Logger.ts';

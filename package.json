@@ -5,7 +5,7 @@
   "exports": "./mod.ts",
   "license": "MIT",
   "scripts": {
-    "check": "bun test && bunx tsc --noEmit && deno check mod.ts && deno lint && dprint fmt"
+    "check": "bun test && node --test *.test.ts && deno test -A && bunx tsc --noEmit && deno check mod.ts && deno lint && dprint fmt"
   },
   "devDependencies": {
     "@types/bun": "latest",

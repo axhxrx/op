@@ -174,6 +174,7 @@ test('runOutOfBand shares IOContext with primary runner', async () =>
     name = 'PrintingOp';
     async execute(): Promise<Success<void>>
     {
+      await Promise.resolve();
       this.io.stdout.write('oob-output');
       return this.succeed(undefined);
     }
