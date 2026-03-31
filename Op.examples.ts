@@ -1,5 +1,4 @@
 import { Op } from './Op.ts';
-import { OpRunner } from './OpRunner.ts';
 import type { FailureOutcomeOf, OutcomeOf, SuccessOutcomeOf } from './Outcome.ts';
 import { PrintOp } from './PrintOp.ts';
 
@@ -174,8 +173,7 @@ export async function match<T extends Op<unknown, unknown>>(
   },
 )
 {
-  const runner = await OpRunner.create(op);
-  const outcome = await runner.run();
+  const outcome = await op.run();
   if (outcome.ok)
   {
     handlers.success(outcome.value);

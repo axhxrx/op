@@ -64,17 +64,10 @@ export function init(rawArgs: string[]): InitResult
   async function opsMain<T extends Op<unknown, unknown>>(initialOp: T): Promise<OutcomeOf<T>>
   {
     const io = await createIOContext(opRunner);
-    SharedContext.overrideDefaultIOContext = io;
+    SharedContext.processDefaultIOContext = SharedContext.createProcessScopedIOContext(io);
 
-    try
-    {
-      const runner = await OpRunner.create(initialOp, opRunner, io);
-      return await runner.run();
-    }
-    finally
-    {
-      SharedContext.overrideDefaultIOContext = null;
-    }
+    const runner = await OpRunner.create(initialOp, opRunner, io);
+    return await runner.run();
   }
 
   return {

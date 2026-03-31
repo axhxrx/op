@@ -34,23 +34,10 @@ export async function main<T extends Op<unknown, unknown>>(
   const { opRunner, remaining } = parseOpRunnerArgs(process.argv.slice(2));
 
   // Create IOContext eagerly so that logging during getInitialOp is captured by TeeStream.
-  // We temporarily set it as the SharedContext override so that console.log (which is patched
-  // to go through SharedContext.effectiveIOContext) writes to the right place.
   const io = await createIOContext(opRunner);
-  SharedContext.overrideDefaultIOContext = io;
+  SharedContext.processDefaultIOContext = SharedContext.createProcessScopedIOContext(io);
 
-  try
-  {
-    const initialOp = getInitialOp instanceof Op ? getInitialOp : getInitialOp(remaining);
-
-    // Clear the override — OpRunner.create() will set itself as default using this same IOContext.
-    SharedContext.overrideDefaultIOContext = null;
-
-    const runner = await OpRunner.create(initialOp, opRunner, io);
-    return await runner.run();
-  }
-  finally
-  {
-    SharedContext.overrideDefaultIOContext = null;
-  }
+  const initialOp = getInitialOp instanceof Op ? getInitialOp : getInitialOp(remaining);
+  const runner = await OpRunner.create(initialOp, opRunner, io);
+  return await runner.run();
 }

@@ -14,10 +14,12 @@ export class SharedContext
      Returns the IO context that ops should use, in order of precedence:
        1. The override default IO context, if it exists (mainly for tests, and some edge cases)
        2. The OpRunner's default IO context, if it exists (set by OpRunner when it runs an op)
-       3. A fallback default IO context that uses process.stdin/stdout/stderr and a default logger
+       3. The process-scoped IO context, if it exists (set by main()/init() for the life of the process)
+       4. A fallback default IO context that uses process.stdin/stdout/stderr and a default logger
      */
     return this.overrideDefaultIOContext
       ?? this.defaultIOContext
+      ?? this.processDefaultIOContext
       ?? {
         stdin: process.stdin,
         stdout: process.stdout,
@@ -35,7 +37,41 @@ export class SharedContext
     return OpRunner.defaultIOContext;
   }
 
+  private static _processDefaultIOContext: IOContext | null = null;
   private static _overrideIOContext: IOContext | null = null;
+
+  /**
+   Creates an IOContext safe to keep around after a runner finishes.
+
+   The key idea is that stdout/stderr/log routing are process-scoped, but record/replay
+   stdin wrappers are run-scoped and should not survive beyond the run that created them.
+   */
+  static createProcessScopedIOContext(ioContext: IOContext): IOContext
+  {
+    const hasEphemeralInput = ioContext.recordableStdin !== undefined || ioContext.replayableStdin !== undefined;
+
+    return {
+      stdin: hasEphemeralInput ? process.stdin : ioContext.stdin,
+      stdout: ioContext.stdout,
+      stderr: ioContext.stderr,
+      mode: hasEphemeralInput && ioContext.mode !== 'test' ? 'interactive' : ioContext.mode,
+      logger: ioContext.logger,
+    };
+  }
+
+  /**
+   The process-scoped IO context persists after the active runner ends so that console/log
+   output keeps flowing through the same TeeStream/log file for the rest of the process.
+   */
+  static set processDefaultIOContext(ioContext: IOContext | null)
+  {
+    this._processDefaultIOContext = ioContext;
+  }
+
+  static get processDefaultIOContext(): IOContext | null
+  {
+    return this._processDefaultIOContext;
+  }
 
   /**
    Anybody may set the override default IO context, as it is explicitly for tests, and unusual cases like integrating with some other library that manipulates stdin/stdout.

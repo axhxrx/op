@@ -26,7 +26,7 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
 
    If a default OpRunner already exists (i.e., the app was started via `main()` or `init()`), the op is run out-of-band on the default runner's temporary stack, sharing the program's IOContext. This means all output flows to the same TeeStream/log file regardless of which stack produced it. The IOContext is program-scoped, not stack-scoped.
 
-   If no default runner exists, one is created (making this the program's primary runner).
+   If no default runner exists, one is created. If the process was already initialized via `main()` or `init()`, that fresh runner reuses the process-scoped output routing so logs keep flowing to the same TeeStream/log file.
 
    This method is reentrant — ops running out-of-band can themselves call `Op.run()`.
    */
@@ -56,7 +56,7 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
 
    If a default OpRunner already exists, the op is run out-of-band on the default runner's temporary stack, sharing the program's IOContext.
 
-   If no default runner exists, one is created (making this the program's primary runner).
+   If no default runner exists, one is created. If the process was already initialized via `main()` or `init()`, that fresh runner reuses the process-scoped output routing so logs keep flowing to the same TeeStream/log file.
 
    This method is reentrant — ops running via `run()` can themselves call `run()` on child ops.
    */
@@ -69,8 +69,12 @@ export abstract class Op<SuccessT = unknown, FailureT = unknown>
       return await defaultRunner.runOutOfBand(this) as Outcome<SuccessT, FailureT>;
     }
 
-    // No existing default — first runner for this program.
-    const runner = await OpRunner.create(this);
+    // No active runner. If the process has already been initialized via main()/init(),
+    // reuse its process-scoped IO so detached top-level ops keep logging to the same sink.
+    const processDefaultIOContext = SharedContext.processDefaultIOContext;
+    const runner = processDefaultIOContext
+      ? await OpRunner.create(this, { mode: processDefaultIOContext.mode }, processDefaultIOContext)
+      : await OpRunner.create(this);
     return await runner.run();
   }
 
