@@ -1,12 +1,11 @@
 import { expect, test } from 'bun:test';
-import type { IOContext } from './IOContext.ts';
 import { isOp } from './isOp.ts';
 import { Op } from './Op.ts';
 
 class TestOp extends Op<string, never>
 {
   name = 'TestOp';
-  async run(_io?: IOContext)
+  async run()
   {
     await Promise.resolve();
     return this.succeed('ok');

@@ -15,116 +15,53 @@ import { SharedContext } from './SharedContext.ts';
 
 /**
  Abstract base class for ops.
+
+ Ops should use `console.log()`, `console.warn()`, and `console.error()` for output. When the framework is initialized via `main()` or `init()`, console is monkey-patched to flow through the IOContext, making output compatible with TeeStream logging and other IO capture.
+
+ For ops that need raw stream access (e.g., reading from stdin), use `this.io` to get the effective IOContext.
  */
 export abstract class Op<SuccessT = unknown, FailureT = unknown>
 {
   /**
    The `static` variant of `run()` creates an instance of the op and executes it through OpRunner.
 
-   This type-fu avoids the `Cannot create an instance of an abstract class` error.
+   If a default OpRunner already exists (i.e., the app was started via `main()` or `init()`), the op is run out-of-band on the default runner's temporary stack, sharing the program's IOContext. This means all output flows to the same TeeStream/log file regardless of which stack produced it. The IOContext is program-scoped, not stack-scoped.
+
+   If no default runner exists, one is created (making this the program's primary runner).
+
+   This method is reentrant — ops running out-of-band can themselves call `Op.run()`.
    */
+  // (This type-fu avoids the `Cannot create an instance of an abstract class` error.)
   public static async run<ThisT extends new(...args: never[]) => Op<unknown, unknown>>(
     this: ThisT,
     ...args: ConstructorParameters<ThisT>
   ): Promise<OutcomeOf<InstanceType<ThisT>>>
   {
     const op = new this(...args) as InstanceType<ThisT>;
+    const defaultRunner = OpRunner.default;
+
+    if (defaultRunner)
+    {
+      return await defaultRunner.runOutOfBand(op) as OutcomeOf<InstanceType<ThisT>>;
+    }
+
+    // No existing default — first runner for this program.
     const runner = await OpRunner.create(op);
     return await runner.run();
   }
 
   abstract name: string;
 
-  /**
-   @deprecated The `io` parameter will be removed in a future version. Ops should access the IOContext via `this.getIO()` (no args) instead. OpRunner sets `OpRunner.defaultIOContext` automatically, so the explicit parameter is redundant during normal execution.
-   */
-  abstract run(io?: IOContext): Promise<RunResult<SuccessT, FailureT>>;
+  abstract run(): Promise<RunResult<SuccessT, FailureT>>;
 
   /**
-   Returns the default IOContext, if it exists, falling back to process `stdin`, `stdout, and `stderr` streams if not.
+   Returns the effective IOContext, falling back to process `stdin`, `stdout`, and `stderr` streams if no OpRunner has been created yet.
 
-   NOTE: This replaces the deprecated getIO() method, but it does not know anything about to to-be-removed `io` parameter of `Op`'s `run()` method. It is the responsibility of the caller to migrate from `getIO(io)` to `this.io` and ensure that `OpRunner.defaultIOContext` is set appropriately.
+   Most ops don't need this — just use `console.log()` for output. This getter is for ops that need raw stream access, such as reading from stdin or writing binary data.
    */
   protected get io(): IOContext
   {
     return SharedContext.effectiveIOContext;
-  }
-
-  /**
-   Get IO context, defaulting to process streams if not provided.
-
-   @deprecated The `io` parameter will be removed in a future version. Use `this.io` with no arguments instead — but note the behavioral difference, if you are migrating old code that uses the `io` parameter.
-   */
-  protected getIO(io?: IOContext): IOContext
-  {
-    return io ?? this.io;
-  }
-
-  /**
-   Convenience method for logging from ops. Uses the logger from IOContext.
-
-   @deprecated The `io` parameter will be removed in a future version. Use `this.log(message)` instead.
-
-   @example
-   ```typescript
-   class MyOp extends Op {
-     async run() {
-       this.log('Starting operation...');
-       return this.succeed(result);
-     }
-   }
-   ```
-   */
-  protected log(io: IOContext | undefined, message: string): void;
-  protected log(message: string): void;
-  protected log(ioOrMessage: IOContext | undefined | string, message?: string): void
-  {
-    if (typeof ioOrMessage === 'string')
-    {
-      this.getIO().logger.log(ioOrMessage);
-    }
-    else
-    {
-      this.getIO(ioOrMessage).logger.log(message!);
-    }
-  }
-
-  /**
-   Convenience method for warning from ops.
-
-   @deprecated The `io` parameter will be removed in a future version. Use `this.warn(message)` instead.
-   */
-  protected warn(io: IOContext | undefined, message: string): void;
-  protected warn(message: string): void;
-  protected warn(ioOrMessage: IOContext | undefined | string, message?: string): void
-  {
-    if (typeof ioOrMessage === 'string')
-    {
-      this.getIO().logger.warn(ioOrMessage);
-    }
-    else
-    {
-      this.getIO(ioOrMessage).logger.warn(message!);
-    }
-  }
-
-  /**
-   Convenience method for errors from ops.
-
-   @deprecated The `io` parameter will be removed in a future version. Use `this.error(message)` instead.
-   */
-  protected error(io: IOContext | undefined, message: string): void;
-  protected error(message: string): void;
-  protected error(ioOrMessage: IOContext | undefined | string, message?: string): void
-  {
-    if (typeof ioOrMessage === 'string')
-    {
-      this.getIO().logger.error(ioOrMessage);
-    }
-    else
-    {
-      this.getIO(ioOrMessage).logger.error(message!);
-    }
   }
 
   /**

@@ -4,6 +4,9 @@
   "type": "module",
   "exports": "./mod.ts",
   "license": "MIT",
+  "scripts": {
+    "check": "bun test && bunx tsc --noEmit && deno check mod.ts && deno lint && dprint fmt"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^24.2.0"

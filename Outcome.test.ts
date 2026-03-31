@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import {
   isFailure,
@@ -65,7 +64,7 @@ test('isOutcome returns false for non-Outcome values', () =>
 class DummyOp extends Op<string, 'fail'>
 {
   name = 'DummyOp';
-  async run(_io?: IOContext)
+  async run()
   {
     await Promise.resolve();
     return this.succeed('ok');

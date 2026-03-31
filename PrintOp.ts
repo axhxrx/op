@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 
-import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import type { Failure, Success } from './Outcome.ts';
 
@@ -11,37 +10,34 @@ type PrintOpOutcome = Success<string> | Failure<'ProhibitedWord'> | Failure<'Mes
 type PrintOpFailure = 'ProhibitedWord' | 'MessageTooLong' | 'unknownError';
 
 /**
- * Options for PrintOp
+ Options for PrintOp
  */
 export interface PrintOpOptions
 {
   /**
-   * Optional list of prohibited words. If message contains any of these, fails with 'ProhibitedWord'
+   Optional list of prohibited words. If message contains any of these, fails with 'ProhibitedWord'
    */
   prohibitedWords?: string[];
 
   /**
-   * Optional maximum message length. If specified and message exceeds this, fails with 'MessageTooLong'
-   * Default: no limit
+   Optional maximum message length. If specified and message exceeds this, fails with 'MessageTooLong'
+
+   Default: no limit
    */
   maxLength?: number;
 }
 
 /**
- PrintOp - Prints a message to stdout
+ PrintOp — an example op that prints a message to stdout.
 
- This op respects the IOContext, so output will be captured in logs/replays.
+ This is a simple demonstration of how to write an op that produces output. For general-purpose printing in ops, just use `console.log()` — the framework patches console to flow through IOContext automatically.
 
- Features:
- - Optional prohibited words validation
- - Optional message length validation
- - Uses io.stdout.write() to respect TeeStream and other IO redirections
+ PrintOp adds optional validation features (prohibited words, max length) as an example of how ops can enforce constraints.
 
  Example:
  ```ts
- // Simple print (no limits)
  const op = new PrintOp('Hello, world!');
- await op.run(ioContext);
+ await op.run();
 
  // With validation
  const op2 = new PrintOp('Hello', {
@@ -78,34 +74,32 @@ export class PrintOp extends Op<string, PrintOpFailure>
     return `PrintOp`;
   }
 
-  async run(io?: IOContext): Promise<PrintOpOutcome>
+  async run(): Promise<PrintOpOutcome>
   {
-    const { stdout } = this.getIO(io);
-
     await Promise.resolve();
     try
     {
       // Check for prohibited words
       if (this.options.prohibitedWords?.some((word) => this.message.includes(word)))
       {
-        // The 'as const' is CRITICAL - it preserves the literal type 'ProhibitedWord'
         return this.fail('ProhibitedWord' as const, `Message: ${this.message}`);
       }
 
       // Check message length (only if maxLength is specified)
       if (this.options.maxLength !== undefined && this.message.length > this.options.maxLength)
       {
-        // Another literal type preserved with 'as const'
         return this.fail('MessageTooLong' as const, `Length: ${this.message.length}, Max: ${this.options.maxLength}`);
       }
 
-      // Success path - write to stdout (respects TeeStream!)
-      stdout.write(this.message);
+      // We use this.io.stdout.write() instead of console.log() here because PrintOp writes
+      // exact bytes — no trailing newline is appended. Callers control the exact output format.
+      // Console is monkey-patched to flow through IOContext too, but console.log() always
+      // appends a newline, which would be a behavior change for PrintOp consumers.
+      this.io.stdout.write(this.message);
       return this.succeed(this.message);
     }
     catch (error: unknown)
     {
-      // Catch-all for unexpected errors
       return this.failWithUnknownError(String(error));
     }
   }

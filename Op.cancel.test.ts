@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 
 /**
@@ -16,7 +15,7 @@ class CancelableOp extends Op<string, 'canceled'>
     this.shouldCancel = shouldCancel;
   }
 
-  async run(_io?: IOContext)
+  async run()
   {
     await Promise.resolve();
 

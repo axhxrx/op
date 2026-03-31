@@ -3,6 +3,9 @@
   "version": "0.9.3",
   "exports": "./mod.ts",
   "license": "MIT",
+  "tasks": {
+    "check": "bun test && bunx tsc --noEmit && deno check mod.ts && deno lint && dprint fmt"
+  },
   "compilerOptions": {
     "noUncheckedIndexedAccess": true
   },

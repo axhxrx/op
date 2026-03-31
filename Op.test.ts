@@ -1,13 +1,10 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { createIOContext, type IOContext } from './IOContext.ts';
 import { FetchUserOp, PrintOp } from './Op.examples.ts';
 import { Op } from './Op.ts';
 import type { OutcomeOf } from './Outcome.ts';
-import { TeeStream } from './TeeStream.ts';
+import { patchConsole, unpatchConsole } from './patchConsole.ts';
+import { SharedContext } from './SharedContext.ts';
 
 test('PrintOp - success case', async () =>
 {
@@ -185,7 +182,7 @@ class CalculateOp extends Op<
     return `CalculateOp(${this.a}, ${this.b})`;
   }
 
-  async run(_io?: IOContext)
+  async run()
   {
     await Promise.resolve();
     if (this.a < 0 || this.b < 0)
@@ -210,7 +207,7 @@ class StaticRunFinalOp extends Op<string, 'unknownError'>
 {
   name = 'StaticRunFinalOp';
 
-  async run(_io?: IOContext)
+  async run()
   {
     await Promise.resolve();
     return this.succeed('terminal result');
@@ -221,33 +218,11 @@ class StaticRunRootOp extends Op<string, 'unknownError'>
 {
   name = 'StaticRunRootOp';
 
-  async run(_io?: IOContext)
+  async run()
   {
     await Promise.resolve();
     return this.replaceWith(new StaticRunFinalOp());
   }
-}
-
-class LoggingOp extends Op<string, 'unknownError'>
-{
-  name = 'LoggingOp';
-
-  run(io?: IOContext)
-  {
-    this.log(io, 'hello from logger');
-    this.warn(io, 'warning from logger');
-    this.error(io, 'error from logger');
-    return Promise.resolve(this.succeed('ok'));
-  }
-}
-
-function endTeeStream(stream: TeeStream): Promise<void>
-{
-  return new Promise<void>((resolve, reject) =>
-  {
-    stream.once('error', reject);
-    stream.end(resolve);
-  });
 }
 
 test('CalculateOp - success with complex return type', async () =>
@@ -307,65 +282,48 @@ test('Op.run() executes through OpRunner and returns terminal outcome', async ()
   });
 });
 
-test('Op logger respects IOContext stdout and log file', async () =>
+test('console.log goes through IOContext when patched', () =>
 {
-  const tempDir = await mkdtemp(join(tmpdir(), 'op-logger-'));
-  const logFile = join(tempDir, 'runner.log');
-  const stdoutTerminal = new PassThrough();
-  const stderrTerminal = new PassThrough();
-  let stdoutOutput = '';
-  let stderrOutput = '';
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
 
-  stdoutTerminal.setEncoding('utf8');
-  stderrTerminal.setEncoding('utf8');
-  stdoutTerminal.on('data', (chunk: string) =>
-  {
-    stdoutOutput += chunk;
-  });
-  stderrTerminal.on('data', (chunk: string) =>
-  {
-    stderrOutput += chunk;
-  });
+  const mockStdout = new PassThrough();
+  const mockStderr = new PassThrough();
+  mockStdout.setEncoding('utf8');
+  mockStderr.setEncoding('utf8');
+  mockStdout.on('data', (chunk: string) => stdoutChunks.push(chunk));
+  mockStderr.on('data', (chunk: string) => stderrChunks.push(chunk));
+
+  const { createDefaultLogger } = require('./Logger.ts');
+  SharedContext.overrideDefaultIOContext = {
+    stdin: process.stdin,
+    stdout: mockStdout,
+    stderr: mockStderr,
+    mode: 'test' as const,
+    logger: createDefaultLogger(),
+  };
 
   try
   {
-    const io = await createIOContext({
-      mode: 'test',
-      logFile,
-    }, {
-      stdout: stdoutTerminal,
-      stderr: stderrTerminal,
-    });
+    patchConsole();
 
-    const outcome = await new LoggingOp().run(io);
-    expect(outcome).toEqual({
-      ok: true,
-      value: 'ok',
-    });
+    console.log('hello from log');
+    console.warn('hello from warn');
+    console.error('hello from error');
 
-    const stdout = io.stdout;
-    const stderr = io.stderr;
-    if (!(stdout instanceof TeeStream) || !(stderr instanceof TeeStream))
-    {
-      throw new Error('Expected IOContext stdout and stderr to be TeeStreams');
-    }
-
-    await Promise.all([endTeeStream(stdout), endTeeStream(stderr)]);
-
-    const logContents = await readFile(logFile, 'utf8');
-    expect(logContents).toContain('hello from logger');
-    expect(logContents).toContain('warning from logger');
-    expect(logContents).toContain('error from logger');
-    expect(stdoutOutput).toContain('hello from logger');
-    expect(stdoutOutput).not.toContain('warning from logger');
-    expect(stdoutOutput).not.toContain('error from logger');
-    expect(stderrOutput).toContain('warning from logger');
-    expect(stderrOutput).toContain('error from logger');
-    expect(stderrOutput).not.toContain('hello from logger');
+    expect(stdoutChunks.join('')).toContain('hello from log');
+    expect(stderrChunks.join('')).toContain('hello from warn');
+    expect(stderrChunks.join('')).toContain('hello from error');
+    // log should NOT appear in stderr
+    expect(stderrChunks.join('')).not.toContain('hello from log');
+    // warn/error should NOT appear in stdout
+    expect(stdoutChunks.join('')).not.toContain('hello from warn');
+    expect(stdoutChunks.join('')).not.toContain('hello from error');
   }
   finally
   {
-    await rm(tempDir, { recursive: true, force: true });
+    unpatchConsole();
+    SharedContext.overrideDefaultIOContext = null;
   }
 });
 
@@ -401,29 +359,41 @@ test('Type narrowing works correctly', async () =>
   }
 });
 
-test('Op.getIO prefers explicit io over OpRunner.defaultIOContext', async () =>
+test('Op.io returns SharedContext.effectiveIOContext', () =>
 {
-  const customIO = await createIOContext({ mode: 'test' }, {
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
-  });
-
-  class GetIOTestOp extends Op<IOContext, never>
+  class IOAccessOp extends Op<string, never>
   {
-    name = 'GetIOTestOp';
-    async run(io?: IOContext)
+    name = 'IOAccessOp';
+    async run()
     {
       await Promise.resolve();
-      return this.succeed(this.getIO(io));
+      // Access this.io to prove it works
+      const mode = this.io.mode;
+      return this.succeed(mode);
     }
   }
 
-  const op = new GetIOTestOp();
-  const outcome = await op.run(customIO);
+  const mockStdout = new PassThrough();
+  const mockStderr = new PassThrough();
+  const { createDefaultLogger } = require('./Logger.ts');
 
-  if (!outcome.ok) throw new Error('Expected success');
-  expect(outcome.value).toBe(customIO);
-  expect(outcome.value.mode).toBe('test');
+  SharedContext.overrideDefaultIOContext = {
+    stdin: process.stdin,
+    stdout: mockStdout,
+    stderr: mockStderr,
+    mode: 'test' as const,
+    logger: createDefaultLogger(),
+  };
+
+  try
+  {
+    const op = new IOAccessOp();
+    expect(op['io'].mode).toBe('test');
+  }
+  finally
+  {
+    SharedContext.overrideDefaultIOContext = null;
+  }
 });
 
 test('Op.fail includes debugData when provided', async () =>
@@ -431,7 +401,7 @@ test('Op.fail includes debugData when provided', async () =>
   class FailDebugOp extends Op<never, 'badThing'>
   {
     name = 'FailDebugOp';
-    async run(_io?: IOContext)
+    async run()
     {
       await Promise.resolve();
       return this.fail('badThing' as const, 'extra info here');
@@ -449,7 +419,7 @@ test('Op.failWithUnknownError includes debugData', async () =>
   class UnknownFailOp extends Op<never, 'unknownError'>
   {
     name = 'UnknownFailOp';
-    async run(_io?: IOContext)
+    async run()
     {
       await Promise.resolve();
       return this.failWithUnknownError('something went wrong');
@@ -467,7 +437,7 @@ test('Op.cancel returns standard canceled failure', async () =>
   class CancelOp extends Op<never, 'canceled'>
   {
     name = 'CancelOp';
-    async run(_io?: IOContext)
+    async run()
     {
       await Promise.resolve();
       return this.cancel();

@@ -1,4 +1,3 @@
-import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
 import type { FailureOutcomeOf, OutcomeOf, SuccessOutcomeOf } from './Outcome.ts';
@@ -76,7 +75,7 @@ export class FetchUserOp extends Op<
     return `FetchUserOp(${this.userId})`;
   }
 
-  async run(_io?: IOContext)
+  async run()
   {
     await Promise.resolve();
     try

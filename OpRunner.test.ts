@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import process from 'node:process';
-import type { IOContext } from './IOContext.ts';
 import { Op } from './Op.ts';
 import { OpRunner } from './OpRunner.ts';
 import type { Outcome, OutcomeHandler } from './Outcome.ts';
@@ -44,7 +43,7 @@ class ScriptedOp extends Op<unknown, string>
     this.script = script;
   }
 
-  async run(_io?: IOContext)
+  async run()
   {
     await Promise.resolve();
     const action = this.script[this.callCount++];

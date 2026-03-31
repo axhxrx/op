@@ -28,6 +28,9 @@ export { hasAnsi, stripAnsi, stripAnsiFromLines } from './stripAnsi.ts';
 export { TeeStream, TeeStreamLogSink } from './TeeStream.ts';
 export type { TeeStreamOptions, TeeStreamPair, TeeStreamTerminalStreams } from './TeeStream.ts';
 
+// Console monkey-patch
+export { isConsolePatched, patchConsole, unpatchConsole } from './patchConsole.ts';
+
 // Simple ops
 export { ExecOp } from './ExecOp.ts';
 export type { ExecOpOptions, ExecResult } from './ExecOp.ts';

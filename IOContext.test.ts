@@ -29,7 +29,8 @@ test('createIOContext in record mode creates RecordableStdin', async () =>
   {
     expect(io.mode).toBe('record');
     expect(io.recordableStdin).toBeInstanceOf(RecordableStdin);
-    expect(io.stdin).toBe(io.recordableStdin);
+    expect(io.recordableStdin).toBeDefined();
+    expect(io.stdin).toBe(io.recordableStdin!);
   }
   finally
   {

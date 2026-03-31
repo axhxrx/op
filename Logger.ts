@@ -1,14 +1,15 @@
 /**
- Simple Logger for ops to use instead of console.log
+ Namespaced logger with configurable writers.
 
- Future enhancements (not implemented yet):
- - Log levels and filtering
- - File output
- - Hierarchical loggers (parent/child relationships)
- - Structured logging
- - Log rotation
+ By default, Logger calls `console.log`/`console.warn`/`console.error`, which — when the framework is initialized via `main()` or `init()` — are monkey-patched to flow through the IOContext. This means Logger output is automatically compatible with TeeStream logging and other IO capture without any special configuration.
 
- Current implementation: Simple wrapper around console with namespace
+ For cases where output should bypass the screen entirely (e.g., verbose debug logging to a file), provide custom writer functions via `LoggerOptions`.
+
+ // TODO: Add log-level-based routing so that e.g. debug messages can be configured
+ // to go to file only, while info/warn/error go to the screen. This would work by
+ // having the Logger check a configuration object and route to either console.*
+ // (which goes through IOContext via the monkey-patch) or directly to a file writer
+ // (which bypasses IOContext and the screen).
  */
 type LoggerWriter = (message: string) => void;
 

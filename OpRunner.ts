@@ -11,6 +11,7 @@ import {
   OP_CONTROL,
   type OutcomeOf,
 } from './Outcome.ts';
+import { patchConsole } from './patchConsole.ts';
 
 /**
  Stack-based operation runner with full observability
@@ -56,9 +57,9 @@ export class OpRunner<T extends Op<unknown, unknown>>
   protected static _default?: OpRunner<Op<unknown, unknown>>;
 
   /**
-   This reference is stored mainly for debugging.
+   The default (and typically only) OpRunner instance for the program. Used by `Op.run()` to delegate to `runOutOfBand()` instead of creating a new runner.
    */
-  protected static get default(): OpRunner<Op<unknown, unknown>> | undefined
+  static get default(): OpRunner<Op<unknown, unknown>> | undefined
   {
     return this._default;
   }
@@ -72,19 +73,64 @@ export class OpRunner<T extends Op<unknown, unknown>>
   }
 
   /**
-   Create an OpRunner instance (async because IO setup may be async). This is the only way to create an OpRunner, the constructor is private.
+   Create an OpRunner instance (async because IO setup may be async).
 
-   As side effect, this also updates the `OpRunner.defaultIOContext` reference (it just points to the last created instance), which is used  by ops that want to access "the current IOContext" without having it passed in — this is hacky, but it supports the simple case of "I just want to run this op and have it access stdin/stdout" without having to thread the IOContext through every call. A future version of this library may improve this.
+   **Most consumers should use `main()`, `init()`, or `Op.run()` instead.** This is a lower-level API for advanced use cases like custom entry points or test harnesses.
+
+   As a side effect, this patches `console.log`/`warn`/`error` to flow through the IOContext (idempotent), and sets this runner as the global default. The default runner's IOContext is used by `SharedContext.effectiveIOContext`, which is what `console.log` and `this.io` resolve to.
+
+   Creating multiple OpRunners is discouraged — the last one created becomes the default, and all console output routes to its IOContext. For running additional ops within an already-running program, use `Op.run()` (the static method), which delegates to the default runner's `runOutOfBand()` rather than creating a new runner.
+
+   If `existingIO` is provided, that IOContext is used instead of creating a new one. This is used by `main()` to eagerly create the IOContext before the op factory runs, so that setup-time logging is captured by TeeStream.
    */
   static async create<T extends Op<unknown, unknown>>(
     initialOp: T,
     ioConfig: OpRunnerArgs = { mode: 'interactive' },
+    existingIO?: IOContext,
   ): Promise<OpRunner<T>>
   {
-    const io = await createIOContext(ioConfig);
+    patchConsole();
+
+    const io = existingIO ?? await createIOContext(ioConfig);
     const runner = new OpRunner(initialOp, ioConfig, io);
     this._default = runner as OpRunner<Op<unknown, unknown>>;
     return runner;
+  }
+
+  /**
+   Run an op on a temporary stack, reusing this runner's IOContext.
+
+   This is the mechanism behind `Op.run()` when called within an already-running program. It creates a fresh stack for the op, executes it (including any control flow like `replaceWith` or `handleOutcome`), and returns the terminal outcome. The primary stack is suspended during execution and restored afterward.
+
+   This method is reentrant — an op running out-of-band can itself call `Op.run()`, which will nest another out-of-band execution. Each level saves and restores via local variables on the JS call stack, so there's no interleaving.
+   */
+  async runOutOfBand<U extends Op<unknown, unknown>>(op: U): Promise<OutcomeOf<U>>
+  {
+    const savedStack = this.stack;
+    const savedOutcome = this.finalOutcome;
+
+    this.stack = [op];
+    this.finalOutcome = undefined;
+
+    try
+    {
+      while (await this.runStep())
+      {
+        // runStep() operates on this.stack, which is now the temporary stack
+      }
+
+      if (this.finalOutcome === undefined)
+      {
+        throw new Error(`[OpRunner] Out-of-band execution of ${op.name} completed without a terminal outcome`);
+      }
+
+      return this.finalOutcome as OutcomeOf<U>;
+    }
+    finally
+    {
+      this.stack = savedStack;
+      this.finalOutcome = savedOutcome;
+    }
   }
 
   /**
@@ -185,7 +231,7 @@ export class OpRunner<T extends Op<unknown, unknown>>
     }
 
     const opStartTime = Date.now();
-    const result = await op.run(this.io);
+    const result = await op.run();
     const opDuration = Date.now() - opStartTime;
 
     // STEP 1: Control-flow values are handled before terminal outcomes
@@ -395,6 +441,14 @@ export class OpRunner<T extends Op<unknown, unknown>>
     {
       this.io.recordableStdin?.destroy();
       this.io.replayableStdin?.destroy();
+
+      // Clear the default runner reference so that subsequent Op.run() calls create a
+      // fresh runner rather than delegating to this now-finished one (which has destroyed
+      // recording/replay streams and a completed lifecycle).
+      if (OpRunner._default === (this as unknown))
+      {
+        OpRunner._default = undefined;
+      }
     }
   }
 
