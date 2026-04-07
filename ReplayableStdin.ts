@@ -37,6 +37,9 @@ export class ReplayableStdin extends BufferedStdin
   private replayTimeout?: ReturnType<typeof setTimeout>;
   private interactiveListenersAttached = false;
   private pendingRawMode?: boolean;
+  private replayWithOriginalTiming = false;
+  private echoStream?: NodeJS.WriteStream | NodeJS.WritableStream;
+  private didResumeSource = false;
 
   private readonly handleInteractiveData = (data: InputChunk): void =>
   {
@@ -84,15 +87,22 @@ export class ReplayableStdin extends BufferedStdin
 
   /**
    Create a ReplayableStdin by loading a session file
+
+   @param sessionPath - Path to the session JSON file
+   @param stdinSource - The underlying stdin stream (default: process.stdin)
+   @param echoStream - If provided, replayed input data is written here during replay to simulate terminal echo (the visual appearance of the user typing). Pass stdout to make replay look like an interactive session.
    */
   static async create(
     sessionPath: string,
     stdinSource: StdinSource = process.stdin,
+    echoStream?: NodeJS.WriteStream | NodeJS.WritableStream,
   ): Promise<ReplayableStdin>
   {
     const sessionContent = await readFile(sessionPath, 'utf-8');
     const session = JSON.parse(sessionContent) as Session;
-    return new ReplayableStdin(session, sessionPath, stdinSource);
+    const instance = new ReplayableStdin(session, sessionPath, stdinSource);
+    instance.echoStream = echoStream;
+    return instance;
   }
 
   private attachInteractiveListeners(): void
@@ -136,9 +146,11 @@ export class ReplayableStdin extends BufferedStdin
    Start replaying the session
 
    @param startupDelay - Milliseconds to wait before starting replay (default: 100ms). This gives the UI time to mount and start listening to stdin.
+   @param useOriginalTiming - If true, replay events with the original wall-clock delays from the recording. If false (default), fire events with minimal delays (10ms between each). Original timing is rarely useful for replay — it just makes the replay take as long as the original human interaction.
    */
-  startReplay(startupDelay = 100): void
+  startReplay(startupDelay = 100, useOriginalTiming = false): void
   {
+    this.replayWithOriginalTiming = useOriginalTiming;
     if (this.destroyed)
     {
       return;
@@ -173,9 +185,18 @@ export class ReplayableStdin extends BufferedStdin
       return;
     }
 
-    const elapsedTime = Date.now() - this.startTime;
-    const eventTime = event.timestamp;
-    const delay = Math.max(0, eventTime - elapsedTime);
+    let delay: number;
+    if (this.replayWithOriginalTiming)
+    {
+      const elapsedTime = Date.now() - this.startTime;
+      delay = Math.max(0, event.timestamp - elapsedTime);
+    }
+    else
+    {
+      // Fire events with minimal delays — just enough for the event loop to
+      // process each one before the next arrives.
+      delay = 10;
+    }
 
     this.replayTimeout = setTimeout(() =>
     {
@@ -190,6 +211,13 @@ export class ReplayableStdin extends BufferedStdin
       {
         console.log(`[ReplayableStdin] ⚡ Event ${this.index + 1}/${this.queue.length}: ${JSON.stringify(event.data)}`);
         console.log(`[ReplayableStdin] 🔍 'readable' listener count: ${this.listenerCount('readable')}`);
+      }
+
+      // Echo the replayed data to the output stream so it looks like someone
+      // is typing — simulates the terminal echo that happens in interactive mode.
+      if (this.echoStream)
+      {
+        this.echoStream.write(event.data);
       }
 
       this.enqueueChunk(Buffer.from(event.data, this.encoding));
@@ -218,6 +246,7 @@ export class ReplayableStdin extends BufferedStdin
       this.stdinSource.setRawMode(this.pendingRawMode);
     }
     this.stdinSource.resume();
+    this.didResumeSource = true;
     this.attachInteractiveListeners();
   }
 
@@ -257,6 +286,14 @@ export class ReplayableStdin extends BufferedStdin
   {
     this.clearReplayTimeout();
     this.detachInteractiveListeners();
+
+    // If switchToInteractive() resumed the underlying stdin source, pause it
+    // back so it doesn't keep the event loop alive after the program is done.
+    if (this.didResumeSource)
+    {
+      this.stdinSource.pause();
+      this.didResumeSource = false;
+    }
   }
 
   setRawMode(mode: boolean): this

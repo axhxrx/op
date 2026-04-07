@@ -127,11 +127,11 @@ test('RecordableStdin skips persisted chunks while InputRecording is disabled', 
     assert.deepStrictEqual(dataChunks, ['public-1', 'secret', 'public-2']);
 
     const recording = stdin.getRecording();
-    assert.strictEqual(recording.length, 2);
-    assert.strictEqual(typeof recording[0]!.timestamp, 'number');
+    // 3 events: public-1, placeholder (for the prohibited input), public-2
+    assert.strictEqual(recording.length, 3);
     assert.strictEqual(recording[0]!.data, 'public-1');
-    assert.strictEqual(typeof recording[1]!.timestamp, 'number');
-    assert.strictEqual(recording[1]!.data, 'public-2');
+    assert.ok(recording[1]!.data.includes('FIXME'), 'prohibited input should be replaced with a FIXME placeholder');
+    assert.strictEqual(recording[2]!.data, 'public-2');
   }
   finally
   {

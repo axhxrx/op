@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Test (Bun)
+      - name: Test (Bun drives Bun, Deno, and Node tests)
         run: bun test
 
       - name: JSR check

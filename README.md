@@ -26,21 +26,57 @@ It's a pattern that has yielded better useful results, and fewer useless or harm
 
 _Description forthcoming._
 
-## Security note: disable recording when capturing passwords or sensitive data
+## Recording and replaying interactive sessions
 
-The record/replay mechnanism provided by this library is very useful, but it also records all inputs to a non-encrypted file on disk. You don't want to do this if your CLI program (or whatever you're building) prompts the user for a password, or token, etc.
+This library provides a simple `--record` feature to record an entire interactive user session to a file, and a `--replay` feature to play them back. This can be useful for:
 
-Record a session: `./my-app --record session.json`
-Replay it: `./my-app --replay session.json`
+- recording a sequence of steps, e.g. to reproduce the conditions needed to debug something in your program
+- write E2E tests for CLI apps, that actually run the app and interact with it
+- let coding agents script the program easily to test it themselves (all models understand the session format, and can use it for scripting without any training)
 
-`--record` stores plaintext keystrokes in the session file. To exclude sensitive input:
+To record a session, use `--record $FILENAME`:
+
+```text
+ ./demo-replay.ts --record session.json 
+[IOContext] 🔴 Recording input to: session.json
+Username: Axton
+Password: 
+Favorite color: mauve
+Are you sure? (yes/no): no
+
+You said: Axton, [password hidden], mauve, no
+[RecordableStdin] 💾 Session saved to: session.json
+[RecordableStdin] 📊 Recorded 4 input events
+```
+... and `--replay $FILENAME` to replay it:
+
+```text
+ ./demo-replay.ts --replay session.json
+Username: Axton
+Password: FIXME_EDIT_SESSION_FILE_TO_REPLACE_THIS_PLACEHOLDER
+
+Favorite color: mauve
+Are you sure? (yes/no): no
+
+You said: Axton, [password hidden], mauve, no
+```
+
+Note that when recording, the session is bracketed by informational messages to indicate recording is happening. When replaying, however, this is not done, so as to keep the output as realistic as possible. The main exception to this is when recording is active and passwords are input.
+
+When recording a password with the included `PromptForPasswordOp`, recording is disabled for security. When recording is disabled, instead of recording the real text entered interactively, the above placeholder text is recorded to the session file.
+
+ In our demo program, things still work because we don't check the password. In a real app, though, you'd likely need to work around this, either by editing the session file and replacing the placeholder text with the real password, or else designing your app to be able to skip password prompts when certain environment variables are populated, and use the environment value instead of prompting.
+
+## How to disable recording when capturing passwords or sensitive data
+
+If your CLI program (or whatever you're building) prompts the user for a password, or token, etc., and you don't want to use the simple `PromptForPasswordOp`, you'll need to disable recording in your own code. 
 
 ```typescript
 import { InputRecording } from "@axhxrx/op";
 
 InputRecording.prohibit();
 try {
-  await promptForPassword();
+  await mySensitiveOp.run(); // do your prompting 
 } finally {
   InputRecording.removeProhibition();
 }
@@ -71,6 +107,8 @@ However, that made it obvious that really fixing the the problem all the way req
 The net effect is more simplicity at the point of use, and the elimination of the tension between the two op execution models that didn't work well in tandem.
 
 The second major change is deciding to monkey-patch `console` after all, after explicitly deciding to avoid that originally. In the context of this lib, it makes sense, as it keeps the API much closer to what bots expect when "going with their gut" (coding based on their training data), and patching it enables the valuable record/replay features to still "just work".
+
+- 2026-04-07 🩹 1.0.1 — fix bug where user input wasn't echoed to the UI when replaying a session with --replay
 
 - 2026-03-31 💥 1.0.0 — introduce new hopefully-better execution model, to make direct op invocation and stack-based invocation stop fighting
 

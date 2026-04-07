@@ -87,7 +87,7 @@ export async function createIOContext(
     {
       throw new Error('[IOContext] --replay requires a session file');
     }
-    replayableStdin = await ReplayableStdin.create(config.sessionFile, defaultStdin);
+    replayableStdin = await ReplayableStdin.create(config.sessionFile, defaultStdin, stdout);
     stdin = replayableStdin;
     // ReplayableStdin will print its own status messages
   }

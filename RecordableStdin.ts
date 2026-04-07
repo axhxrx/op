@@ -42,6 +42,8 @@ export class RecordableStdin extends BufferedStdin
   private recording: InputEvent[] = [];
   private startTime: number;
   private sessionTimestamp: string;
+  private placeholderEmittedForCurrentProhibition = false;
+  private lastSeenProhibitionState = false;
 
   private readonly handleData = (data: InputChunk): void =>
   {
@@ -54,12 +56,31 @@ export class RecordableStdin extends BufferedStdin
       ? data
       : data.toString(this.encoding ?? 'utf8');
 
+    // Reset placeholder flag when prohibition state transitions
+    const currentlyProhibited = InputRecording.disabled;
+    if (this.lastSeenProhibitionState && !currentlyProhibited)
+    {
+      this.placeholderEmittedForCurrentProhibition = false;
+    }
+    this.lastSeenProhibitionState = currentlyProhibited;
+
     if (!InputRecording.disabled)
     {
       this.recording.push({
         timestamp: Date.now() - this.startTime,
         data: str,
       });
+    }
+    else if (!this.placeholderEmittedForCurrentProhibition)
+    {
+      // Recording is prohibited (e.g. password prompt), but we still need a
+      // placeholder event so the replay has the right number of steps. The
+      // actual sensitive data is NOT recorded.
+      this.recording.push({
+        timestamp: Date.now() - this.startTime,
+        data: 'FIXME_EDIT_SESSION_FILE_TO_REPLACE_THIS_PLACEHOLDER\n',
+      });
+      this.placeholderEmittedForCurrentProhibition = true;
     }
 
     this.enqueueChunk(data);

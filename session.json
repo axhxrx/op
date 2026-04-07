@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-04-07T05:10:47.896Z",
+  "events": [
+    {
+      "timestamp": 3326,
+      "data": "Axton\n"
+    },
+    {
+      "timestamp": 4204,
+      "data": "FIXME_EDIT_SESSION_FILE_TO_REPLACE_THIS_PLACEHOLDER\n"
+    },
+    {
+      "timestamp": 19349,
+      "data": "mauve\n"
+    },
+    {
+      "timestamp": 21143,
+      "data": "no\n"
+    }
+  ]
+}
