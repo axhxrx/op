@@ -6,6 +6,7 @@ import {
   type InputChunk,
   type StdinSource,
 } from './BufferedStdin.ts';
+import { InputRecording } from './InputRecording.ts';
 import type { InputEvent, Session } from './RecordableStdin.ts';
 
 /**
@@ -215,7 +216,7 @@ export class ReplayableStdin extends BufferedStdin
 
       // Echo the replayed data to the output stream so it looks like someone
       // is typing — simulates the terminal echo that happens in interactive mode.
-      if (this.echoStream)
+      if (this.echoStream && !InputRecording.disabled)
       {
         this.echoStream.write(event.data);
       }

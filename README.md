@@ -108,6 +108,8 @@ The net effect is more simplicity at the point of use, and the elimination of th
 
 The second major change is deciding to monkey-patch `console` after all, after explicitly deciding to avoid that originally. In the context of this lib, it makes sense, as it keeps the API much closer to what bots expect when "going with their gut" (coding based on their training data), and patching it enables the valuable record/replay features to still "just work".
 
+- 2026-04-09 🩹 1.0.2 — fix bug where user session replay would echo simulated user input text to the terminal even when the real app would not (e.g. when using `PromptForPassword.op`)
+
 - 2026-04-07 🩹 1.0.1 — fix bug where user input wasn't echoed to the UI when replaying a session with --replay
 
 - 2026-03-31 💥 1.0.0 — introduce new hopefully-better execution model, to make direct op invocation and stack-based invocation stop fighting
