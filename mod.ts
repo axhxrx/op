@@ -22,7 +22,6 @@ export type { InputEvent, Session } from './RecordableStdin.ts';
 export { ReplayableStdin } from './ReplayableStdin.ts';
 
 // I/O utilities
-export { hasAnsi, stripAnsi, stripAnsiFromLines } from './stripAnsi.ts';
 export { TeeStream, TeeStreamLogSink } from './TeeStream.ts';
 export type { TeeStreamOptions, TeeStreamPair, TeeStreamTerminalStreams } from './TeeStream.ts';
 
@@ -36,6 +35,7 @@ export { PrintOp } from './PrintOp.ts';
 export type { PrintOpOptions } from './PrintOp.ts';
 export { PromptForPasswordOp } from './PromptForPasswordOp.ts';
 export { PromptForValueOp } from './PromptForValueOp.ts';
+export { StripAnsiOp } from './StripAnsiOp.ts';
 
 // Entry points
 export { init } from './init.ts';

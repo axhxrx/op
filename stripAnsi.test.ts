@@ -1,95 +1,97 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { hasAnsi, stripAnsi, stripAnsiFromLines } from './stripAnsi.ts';
+import { StripAnsiOp } from './StripAnsiOp.ts';
 
-test('stripAnsi removes color codes', () =>
+test('StripAnsiOp removes color codes', async () =>
 {
-  const colored = '\u001b[31mRed text\u001b[0m';
-  const clean = stripAnsi(colored);
-  assert.strictEqual(clean, 'Red text');
+  const outcome = await StripAnsiOp.run('\u001b[31mRed text\u001b[0m');
+  assert.ok(outcome.ok);
+  assert.strictEqual(outcome.value, 'Red text');
 });
 
-test('stripAnsi removes bold/italic formatting', () =>
+test('StripAnsiOp removes bold/italic formatting', async () =>
 {
-  const formatted = '\u001b[1mBold\u001b[0m \u001b[3mItalic\u001b[0m';
-  const clean = stripAnsi(formatted);
-  assert.strictEqual(clean, 'Bold Italic');
+  const outcome = await StripAnsiOp.run('\u001b[1mBold\u001b[0m \u001b[3mItalic\u001b[0m');
+  assert.ok(outcome.ok);
+  assert.strictEqual(outcome.value, 'Bold Italic');
 });
 
-test('stripAnsi removes cursor movement codes', () =>
+test('StripAnsiOp removes cursor movement codes', async () =>
 {
-  const withCursor = 'Text\u001b[2AMore text';
-  const clean = stripAnsi(withCursor);
-  assert.strictEqual(clean, 'TextMore text');
+  const outcome = await StripAnsiOp.run('Text\u001b[2AMore text');
+  assert.ok(outcome.ok);
+  assert.strictEqual(outcome.value, 'TextMore text');
 });
 
-test('stripAnsi handles text with no ANSI codes', () =>
+test('StripAnsiOp handles text with no ANSI codes', async () =>
 {
-  const plain = 'Just plain text';
-  const clean = stripAnsi(plain);
-  assert.strictEqual(clean, 'Just plain text');
+  const outcome = await StripAnsiOp.run('Just plain text');
+  assert.ok(outcome.ok);
+  assert.strictEqual(outcome.value, 'Just plain text');
 });
 
-test('stripAnsi handles empty string', () =>
+test('StripAnsiOp handles empty string', async () =>
 {
-  const clean = stripAnsi('');
-  assert.strictEqual(clean, '');
+  const outcome = await StripAnsiOp.run('');
+  assert.ok(outcome.ok);
+  assert.strictEqual(outcome.value, '');
 });
 
-test('stripAnsi handles complex terminal output', () =>
+test('StripAnsiOp handles complex terminal output', async () =>
 {
-  // Terminal output with cursor and colors
-  const terminalOutput = '\u001b[36m❯\u001b[39m Option 1\n  Option 2\n  Option 3';
-  const clean = stripAnsi(terminalOutput);
-  assert.strictEqual(clean, '❯ Option 1\n  Option 2\n  Option 3');
+  const outcome = await StripAnsiOp.run('\u001b[36m❯\u001b[39m Option 1\n  Option 2\n  Option 3');
+  assert.ok(outcome.ok);
+  assert.strictEqual(outcome.value, '❯ Option 1\n  Option 2\n  Option 3');
 });
 
-test('stripAnsiFromLines processes multiple lines', () =>
+test('StripAnsiOp processes multiple lines via string[]', async () =>
 {
-  const lines = [
+  const outcome = await StripAnsiOp.run([
     '\u001b[31mLine 1\u001b[0m',
     '\u001b[32mLine 2\u001b[0m',
     'Plain line 3',
-  ];
-  const clean = stripAnsiFromLines(lines);
-  assert.deepStrictEqual(clean, [
+  ]);
+  assert.ok(outcome.ok);
+  assert.deepStrictEqual(outcome.value, [
     'Line 1',
     'Line 2',
     'Plain line 3',
   ]);
 });
 
-test('hasAnsi detects ANSI codes', () =>
+test('StripAnsiOp.hasAnsi detects ANSI codes', () =>
 {
-  assert.strictEqual(hasAnsi('\u001b[31mRed\u001b[0m'), true);
-  assert.strictEqual(hasAnsi('Plain text'), false);
-  assert.strictEqual(hasAnsi(''), false);
-  assert.strictEqual(hasAnsi('\u001b[2AUp'), true);
+  assert.strictEqual(StripAnsiOp.hasAnsi('\u001b[31mRed\u001b[0m'), true);
+  assert.strictEqual(StripAnsiOp.hasAnsi('Plain text'), false);
+  assert.strictEqual(StripAnsiOp.hasAnsi(''), false);
+  assert.strictEqual(StripAnsiOp.hasAnsi('\u001b[2AUp'), true);
 });
 
-test('stripAnsi preserves emoji and unicode', () =>
+test('StripAnsiOp preserves emoji and unicode', async () =>
 {
-  const withEmoji = '\u001b[31m🎉 Success!\u001b[0m 👍';
-  const clean = stripAnsi(withEmoji);
-  assert.strictEqual(clean, '🎉 Success! 👍');
+  const outcome = await StripAnsiOp.run('\u001b[31m🎉 Success!\u001b[0m 👍');
+  assert.ok(outcome.ok);
+  assert.strictEqual(outcome.value, '🎉 Success! 👍');
 });
 
-test('stripAnsi removes cursor show/hide (private CSI with ? prefix)', () =>
+test('StripAnsiOp removes cursor show/hide (private CSI with ? prefix)', async () =>
 {
-  const showCursor = '\x1b[?25h';
-  const hideCursor = '\x1b[?25l';
-  assert.strictEqual(stripAnsi(`before${hideCursor}after`), 'beforeafter');
-  assert.strictEqual(stripAnsi(`before${showCursor}after`), 'beforeafter');
-  assert.strictEqual(hasAnsi(showCursor), true);
-  assert.strictEqual(hasAnsi(hideCursor), true);
+  const outcome1 = await StripAnsiOp.run(`before\x1b[?25lafter`);
+  assert.ok(outcome1.ok);
+  assert.strictEqual(outcome1.value, 'beforeafter');
+
+  const outcome2 = await StripAnsiOp.run(`before\x1b[?25hafter`);
+  assert.ok(outcome2.ok);
+  assert.strictEqual(outcome2.value, 'beforeafter');
+
+  assert.strictEqual(StripAnsiOp.hasAnsi('\x1b[?25h'), true);
+  assert.strictEqual(StripAnsiOp.hasAnsi('\x1b[?25l'), true);
 });
 
-test('stripAnsi removes alternate screen and bracketed paste sequences', () =>
+test('StripAnsiOp removes alternate screen and bracketed paste sequences', async () =>
 {
-  const altScreenOn = '\x1b[?1049h';
-  const altScreenOff = '\x1b[?1049l';
-  const bracketedPasteOn = '\x1b[?2004h';
-  const bracketedPasteOff = '\x1b[?2004l';
-  const input = `${altScreenOn}content${bracketedPasteOn}pasted${bracketedPasteOff}more${altScreenOff}`;
-  assert.strictEqual(stripAnsi(input), 'contentpastedmore');
+  const input = `\x1b[?1049hcontent\x1b[?2004hpasted\x1b[?2004lmore\x1b[?1049l`;
+  const outcome = await StripAnsiOp.run(input);
+  assert.ok(outcome.ok);
+  assert.strictEqual(outcome.value, 'contentpastedmore');
 });

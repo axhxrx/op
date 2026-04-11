@@ -1,5 +1,5 @@
 /**
- Strip ANSI escape codes from a string
+ Strip ANSI escape codes from a string. This is a pure function, so it is reasonable to import and invoke inside an Op.
 
  Removes:
  - Color codes
@@ -36,29 +36,4 @@ export function stripAnsi(text: string): string
   const ansiPattern = /\x1b\[[?!>]?[0-9;:]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[=>]|\x1b[()][AB0-2]/g;
 
   return text.replace(ansiPattern, '');
-}
-
-/**
- Strip ANSI codes from multiple lines
-
- @param lines - Array of lines that may contain ANSI codes
- @returns Array of clean lines
- */
-export function stripAnsiFromLines(lines: string[]): string[]
-{
-  return lines.map(line => stripAnsi(line));
-}
-
-/**
- Check if a string contains ANSI escape codes
-
- @param text - Text to check
- @returns true if text contains ANSI codes
- */
-export function hasAnsi(text: string): boolean
-{
-  // eslint-disable-next-line no-control-regex
-  // deno-lint-ignore no-control-regex
-  const ansiPattern = /\x1b\[[?!>]?[0-9;:]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[=>]|\x1b[()][AB0-2]/;
-  return ansiPattern.test(text);
 }
