@@ -94,7 +94,9 @@ MIT
 
 ## Happenings
 
-### improved 1.x.x versions
+- 2026-04-11 🔧 Slightly re-work StripAnsiOp to address specific cause of 🤖 confusion
+
+### improved 1.0.x versions
 
 Bite the bullet, and fix the underlying design (accepting breaking changes necessitated by this).
 
