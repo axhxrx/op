@@ -18,7 +18,12 @@ jobs:
       - run: deno lint
 
       - run: deno check
-
+        
+      - uses: dprint/check@v2.3
+        with:
+          args: >-
+            --verbose
+      
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
